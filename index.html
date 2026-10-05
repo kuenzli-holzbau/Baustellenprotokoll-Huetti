@@ -160,6 +160,17 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .mats .mn small{display:block;color:var(--mut)}
 .mats td input{width:62px;padding:6px 5px;border:1px solid var(--line);border-radius:5px;text-align:right;font-size:14px}
 .mats td button{border:0;background:transparent;color:var(--mut);cursor:pointer;font-size:16px;padding:2px 4px}
+.ml{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:#fcfbf9}
+.mlh{display:flex;gap:6px;align-items:flex-start;font-size:13px;font-weight:600}
+.mlh span{flex:1}
+.mlh button{border:0;background:transparent;color:var(--mut);cursor:pointer;font-size:18px;line-height:1;padding:0 2px}
+.ml small{display:block;color:var(--mut);font-size:11px;margin:1px 0 6px}
+.mlr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}
+.mlr input{width:80px;padding:7px 6px;border:1px solid var(--line);border-radius:6px;text-align:right;font-size:15px;background:#fff}
+.mlr .lt{margin-left:auto;font-weight:700;white-space:nowrap}
+.ml .mnote{width:100%;margin-top:6px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:#fff}
+.autosave{font-size:11px;color:var(--mut);margin:-4px 0 8px}
+.efoot{display:flex;justify-content:flex-end;margin-top:12px}
 .mtot{text-align:right;font-weight:700;margin:2px 0 8px;font-size:13px}
 .katq{width:100%;padding:9px;border:1px solid var(--line);border-radius:7px;font-size:14px}
 .katres{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:7px;margin:4px 0 8px;background:#fff}
@@ -308,7 +319,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='5 (05.10.2026)';
+const APP_VERSION='6 (05.10.2026)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 const GEWERKE=['Holzbau','Sanitär','Elektro','Fliesen','Gipser','Maler'];
 /* Regiepreisliste Holzbau (S-0113, Netto-Einkaufspreise): [Art.-Nr., Bezeichnung, Einheit, CHF netto] */
@@ -373,7 +384,7 @@ const lastEntry=p=>entriesOf(p).slice(-1)[0];
 const pinPhotos=p=>p.entries.flatMap(e=>e.photoIds);
 const pinBelegIds=p=>[...new Set(p.entries.flatMap(e=>e.belegIds))];
 const entryWithBeleg=(p,bid)=>p.entries.find(e=>e.belegIds.includes(bid));
-function curEntry(p){if(!p)return null;let e=p.entries.find(x=>x.id===UI.entry);if(!e){e=lastEntry(p);UI.entry=e&&e.id}return e}
+function curEntry(p){if(!p||UI.entry==='none')return null;let e=p.entries.find(x=>x.id===UI.entry);if(!e){e=lastEntry(p);UI.entry=e&&e.id}return e}
 const entBelegeGw=(e,g)=>e.belegIds.filter(id=>(e.belegGw[id]||'')===g).map(id=>S.belege.find(b=>b.id===id)).filter(Boolean);
 const matTotal=ms=>ms.reduce((s,m)=>s+(+m.qty||0)*(+m.price||0),0);
 const entGewerke=e=>GEWERKE.filter(g=>e.gwText[g]||entBelegeGw(e,g).length||(g==='Holzbau'&&e.mats.length));
@@ -465,7 +476,7 @@ function renderPinPanel(){
     el.innerHTML=`${bl}<div class="hd">Einträge ${esc(floorLabel(cf))}</div>${pins.length?pins.map(x=>`<div class="pli" data-act="selPin" data-id="${x.id}"><b>${x.nr}</b><span>${esc(x.title||'(ohne Titel)')}<small>${fmtDate(lastEntry(x).date)} · ${x.entries.length} ${x.entries.length===1?'Eintrag':'Einträge'} · ${pinPhotos(x).length} Foto(s)${pinBelegIds(x).length?' · '+pinBelegIds(x).length+' Beleg(e)':''}${pinGewerke(x).length?'<br>'+esc(pinGewerke(x).join(', ')):''}</small></span></div>`).join(''):'<p class="mut">Noch keine Pins. Klicke oben auf «📍 Pin setzen» und dann auf die Stelle im Grundriss.</p>'}`;
     return}
   const e=curEntry(p);
-  const entHtml=entriesOf(p).map(x=>x.id===e.id?entryEditor(p,x):`<div class="ent c" data-act="selEntry" data-id="${x.id}"><b>${fmtDate(x.date)||'ohne Datum'}</b><span>${esc((x.note||'').split('\n')[0]||'–')}</span><small class="mut">${[x.photoIds.length?'📷'+x.photoIds.length:'',x.belegIds.length?'🧾'+x.belegIds.length:'',x.mats.length?'🪵'+x.mats.length:''].filter(Boolean).join(' ')}</small></div>`).join('');
+  const entHtml=entriesOf(p).map(x=>e&&x.id===e.id?entryEditor(p,x):`<div class="ent c" data-act="selEntry" data-id="${x.id}"><b>${fmtDate(x.date)||'ohne Datum'}</b><span>${esc((x.note||'').split('\n')[0]||'–')}</span><small class="mut">${[x.photoIds.length?'📷'+x.photoIds.length:'',x.belegIds.length?'🧾'+x.belegIds.length:'',x.mats.length?'🪵 CHF '+chf(matTotal(x.mats)):''].filter(Boolean).join(' ')}</small></div>`).join('');
   el.innerHTML=`<div class="hd"><button class="b sm" data-act="closePin">‹ Alle Pins</button><span class="pnr">${p.nr}</span></div>
   <label>Titel / Raum<input data-f="title" value="${esc(p.title)}" placeholder="z.B. Bad OG – Wandanschluss"></label>
   <div class="entbar"><span class="lbl" style="margin:0">Einträge (${p.entries.length})</span><button class="b sm p" data-act="newEntry">+ Neuer Eintrag</button></div>
@@ -480,11 +491,12 @@ function entryEditor(p,e){
     const own=g?avail.filter(b=>b.gewerk===g):[],none=avail.filter(b=>!b.gewerk),oth=avail.filter(b=>b.gewerk&&b.gewerk!==g);
     return `<select data-ch="link" data-gw="${g}"><option value="">+ Beleg ${g?'für '+g+' ':''}zuordnen …</option>${own.length?`<optgroup label="${g}">${own.map(opt).join('')}</optgroup>`:''}${none.length?`<optgroup label="Ohne Gewerk">${none.map(opt).join('')}</optgroup>`:''}${oth.length?`<optgroup label="${g?'Andere Gewerke':'Mit Gewerk'}">${oth.map(opt).join('')}</optgroup>`:''}</select>`};
   const mats=()=>`<div class="mats"><div class="lbl" style="margin:2px 0 4px">Material aus Preisliste (netto)</div>
-    ${e.mats.length?`<table>${e.mats.map((m,i)=>`<tr><td class="mn">${esc(m.name)}<small>${m.code?esc(m.code)+' · ':''}CHF ${m.price==null||m.price===''?'?':chf(m.price)} / ${esc(m.unit)}</small></td>
-      <td class="r"><input data-mq="${i}" inputmode="decimal" value="${qfmt(m.qty)}" placeholder="0"> ${esc(m.unit)}${m.price==null||m.price===''?`<br><input data-mp="${i}" inputmode="decimal" placeholder="Preis" style="margin-top:3px">`:''}</td>
-      <td class="r">${chf((+m.qty||0)*(+m.price||0))}</td><td><button data-act="rmMat" data-id="${i}" title="Entfernen">×</button></td></tr>`).join('')}</table>
-      <div class="mtot">Total Holzbau-Material: CHF ${chf(matTotal(e.mats))}</div>`:''}
-    <input class="katq" data-katq placeholder="🔍 Material suchen, z.B. OSB 18, Lattung, TBS 8x120 …" autocomplete="off"><div class="katres"></div>
+    ${e.mats.map((m,i)=>{const np=m.price==null||m.price==='';return `<div class="ml"><div class="mlh"><span>${esc(m.name)}</span><button data-act="rmMat" data-id="${i}" title="Material entfernen">×</button></div>
+      <small>${m.code?esc(m.code)+' · ':''}${np?'kein Preis in der Liste':'CHF '+chf(m.price)+' / '+esc(m.unit)}</small>
+      <div class="mlr">Menge <input data-mq="${i}" inputmode="decimal" value="${qfmt(m.qty)}" placeholder="0"> ${esc(m.unit)}${np?` · Preis CHF <input data-mp="${i}" inputmode="decimal" placeholder="0.00">`:''}<span class="lt">CHF ${chf((+m.qty||0)*(+m.price||0))}</span></div>
+      <input class="mnote" data-mn="${i}" value="${esc(m.note||'')}" placeholder="Beschreibung, z.B. Beplankung Wand Nord"></div>`}).join('')}
+    ${e.mats.length?`<div class="mtot">Total Holzbau-Material: CHF ${chf(matTotal(e.mats))}</div>`:''}
+    <input class="katq" data-katq placeholder="🔍 Weiteres Material suchen, z.B. OSB 18, Latte, TBS 8x120 …" autocomplete="off"><div class="katres"></div>
     <button class="b sm" data-act="customMat" style="margin-bottom:10px">+ Artikel ohne Preisliste</button></div>`;
   const gwBlock=g=>{const t=e.gwText[g]||'',bl=entBelegeGw(e,g),hz=g==='Holzbau'&&e.mats.length;
     const info=[hz?e.mats.length+' Pos. · CHF '+chf(matTotal(e.mats)):'',t?'Notiz ✓':'',bl.length?bl.length+' Beleg(e)':''].filter(Boolean).join(' · ');
@@ -494,6 +506,7 @@ function entryEditor(p,e){
       <div class="chips">${bl.map(chip).join('')}</div>${sel(g)}</div></details>`};
   const other=entBelegeGw(e,'');
   return `<div class="ent o"><div class="ehd"><input type="date" data-ef="date" value="${esc(e.date)}"><button class="b sm d" data-act="delEntry" title="Eintrag löschen">Eintrag löschen</button></div>
+  <p class="autosave">💾 Alles wird automatisch gespeichert.</p>
   <label>Bemerkungen / Fortschritt<textarea data-ef="note" rows="4" placeholder="Was wurde gemacht, Stand, Besonderheiten …">${esc(e.note)}</textarea></label>
   <div class="lbl">Fotos</div>
   <div class="thumbs">${e.photoIds.map(id=>`<div class="th"><img src="${urlOf(id)}" alt="" data-act="zoomImg" data-id="${id}"><button data-act="rmPhoto" data-id="${id}" title="Foto entfernen">×</button></div>`).join('')}<label class="th add cam" title="Foto aufnehmen">📷<input type="file" accept="image/*" capture="environment" hidden data-up="pinPhotos"></label><label class="th add" title="Fotos aus der Galerie">＋<input type="file" accept="image/*" multiple hidden data-up="pinPhotos"></label></div>
@@ -502,11 +515,12 @@ function entryEditor(p,e){
   ${e.material?`<label style="margin-top:10px">Material allgemein<textarea data-ef="material" rows="2">${esc(e.material)}</textarea></label>`:''}
   <details class="gw" data-gw="" ${UI.gwOpen.has('')||other.length?'open':''}><summary><b>Weitere Belege</b><span class="${other.length?'has':''}">${other.length?other.length+' Beleg(e)':'ohne Gewerk'}</span></summary><div class="in">
     <div class="chips">${other.map(chip).join('')}</div>${sel('')}</div></details>
-  ${e.by?`<p class="mut" style="font-size:12px;margin:10px 0 0">Erfasst von ${esc(e.by)}</p>`:''}</div>`;
+  ${e.by?`<p class="mut" style="font-size:12px;margin:10px 0 0">Erfasst von ${esc(e.by)}</p>`:''}
+  <div class="efoot"><button class="b p" data-act="doneEntry">✓ Eintrag fertig</button></div></div>`;
 }
 function katSearch(q){const w=q.toLowerCase().split(/\s+/).filter(Boolean);if(!w.length)return '';
-  const esc2=x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const wb=w.map(x=>new RegExp('(^|[^a-zäöü0-9])'+esc2(x)));
-  const r=[];for(const k of KAT){const h=(k[0]+' '+k[1]).toLowerCase();if(w.every(x=>h.includes(x)))r.push([wb.filter(re=>re.test(h)).length,k])}
+  const esc2=x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');const wb=w.map(x=>new RegExp('(^|[^a-zäöü0-9])'+esc2(x))),wx=w.map(x=>new RegExp('(^|[^a-zäöü0-9])'+esc2(x)+(/[0-9]$/.test(x)?'(?![0-9])':'(?![a-zäöü0-9])')));
+  const r=[];for(const k of KAT){const h=(k[0]+' '+k[1]).toLowerCase();if(w.every(x=>h.includes(x)))r.push([wb.filter(re=>re.test(h)).length+2*wx.filter(re=>re.test(h)).length,k])}
   r.sort((a,b)=>b[0]-a[0]);const top=r.slice(0,40).map(x=>x[1]);
   return top.length?top.map(k=>`<div class="kr" data-act="addMat" data-id="${k[0]}">${esc(k[1])}<small>${k[0]} · ${k[3]==null?'kein Preis':'CHF '+chf(k[3])} / ${esc(k[2])}</small></div>`).join(''):'<div class="kr mut">Nichts gefunden – «+ Artikel ohne Preisliste» verwenden.</div>'}
 function filteredBelege(){const q=UI.q.trim().toLowerCase();
@@ -645,6 +659,8 @@ const ACT={
     UI.floor=firstFloorId();UI.pin=null;renderPlan()},
   selPin:id=>{UI.pin=id;UI.entry=null;renderPlan()},
   selEntry:id=>{UI.entry=id;renderPinPanel()},
+  doneEntry:async()=>{const p=pinById(UI.pin);if(!p)return;clearTimeout(saveTimers[p.id]);delete saveTimers[p.id];await dbPut('pins',p);UI.entry='none';renderPlan();
+    toast(cloudOn()&&SES?'✓ Eintrag gespeichert – wird synchronisiert':'✓ Eintrag gespeichert')},
   newEntry:async()=>{const p=pinById(UI.pin);if(!p)return;const e=newEntry();p.entries.push(e);UI.entry=e.id;await dbPut('pins',p);renderPlan();const t=document.querySelector('[data-ef="note"]');if(t)t.focus()},
   delEntry:async()=>{const p=pinById(UI.pin),e=curEntry(p);if(!e)return;
     if(p.entries.length===1)return ACT.delPin();
@@ -705,6 +721,7 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
 const saveTimers={};
 document.addEventListener('toggle',e=>{const d=e.target;if(d.tagName==='DETAILS'&&d.dataset&&d.dataset.gw!==undefined){if(d.open)UI.gwOpen.add(d.dataset.gw);else UI.gwOpen.delete(d.dataset.gw)}},true);
 document.addEventListener('input',e=>{const t=e.target;
+  if(t.dataset.mn!==undefined){const p=pinById(UI.pin),en=curEntry(p);if(!en)return;const m=en.mats[+t.dataset.mn];if(!m)return;m.note=t.value;clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);return}
   if(t.dataset.katq!==undefined){const r=t.nextElementSibling;if(r)r.innerHTML=katSearch(t.value);return}
   if(t.dataset.gwt!==undefined||t.dataset.ef){const p=pinById(UI.pin),en=curEntry(p);if(!en)return;if(t.dataset.ef)en[t.dataset.ef]=t.value;else en.gwText[t.dataset.gwt]=t.value;clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);return}
   if(!t.dataset.f)return;const p=pinById(UI.pin);if(!p)return;p[t.dataset.f]=t.value;
@@ -759,7 +776,7 @@ $('#stage').addEventListener('wheel',e=>{if(!e.ctrlKey||!$('#stage .plan'))retur
 /* ---------- PDF-Export ---------- */
 const allMats=()=>S.pins.flatMap(p=>p.entries.flatMap(e=>e.mats));
 function matTable(ms,code){return `<table class="mt"><thead><tr>${code?'<th>Art.-Nr.</th>':''}<th>Material</th><th class="r">Menge</th><th>Einh.</th><th class="r">CHF/Einh.</th><th class="r">CHF</th></tr></thead><tbody>
-  ${ms.map(m=>`<tr>${code?`<td>${esc(m.code||'–')}</td>`:''}<td>${esc(m.name)}</td><td class="r">${qfmt(m.qty)}</td><td>${esc(m.unit)}</td><td class="r">${m.price==null?'':chf(m.price)}</td><td class="r">${chf((+m.qty||0)*(+m.price||0))}</td></tr>`).join('')}
+  ${ms.map(m=>`<tr>${code?`<td>${esc(m.code||'–')}</td>`:''}<td>${esc(m.name)}${m.note&&!code?`<br><i style="color:#555">${esc(m.note)}</i>`:''}</td><td class="r">${qfmt(m.qty)}</td><td>${esc(m.unit)}</td><td class="r">${m.price==null?'':chf(m.price)}</td><td class="r">${chf((+m.qty||0)*(+m.price||0))}</td></tr>`).join('')}
   <tr class="tot"><td colspan="${code?5:4}">Total</td><td class="r">${chf(matTotal(ms))}</td></tr></tbody></table>`}
 async function doPrint(){
   const missing=S.blobs.filter(b=>!b.blob).length;if(missing&&!confirm(`${missing} Foto(s)/Beleg(e) sind noch nicht auf dieses Gerät geladen und würden im PDF fehlen. Trotzdem fortfahren?`))return;
