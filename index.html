@@ -108,6 +108,28 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .ck input{width:auto;margin:0}
 .opts{margin:6px 0 18px}
 
+/* Situationsplan / Gebäude */
+.grp{margin:14px 0 0}
+.gh{font-weight:700;font-size:13px;padding:6px 6px;cursor:pointer;border-radius:6px}
+.gh:hover{background:#efece6;color:var(--acc)}
+.grp .fl{margin-left:10px}
+.floors .b.addf{margin:4px 0 0 10px;width:auto;justify-content:flex-start;font-size:12px}
+.floors>#floorList>.b.addf{margin:16px 0 0}
+.fl.site span{font-weight:600}
+.areas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.areas polygon{fill:rgba(194,65,12,.14);stroke:#c2410c;stroke-width:2.5;vector-effect:non-scaling-stroke}
+.areas .dr{fill:rgba(37,99,235,.15);stroke:#2563eb;stroke-dasharray:7 5}
+.alabel{position:absolute;transform:translate(-50%,-50%);background:rgba(255,255,255,.93);border:1.5px solid #c2410c;color:#9a3412;border-radius:8px;padding:3px 10px;font-weight:700;font-size:13px;pointer-events:none;text-align:center;white-space:nowrap;z-index:1}
+.alabel small{display:block;font-weight:400;font-size:10px;color:#6b6f76}
+.dot{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#2563eb;border:2px solid #fff;pointer-events:none;z-index:2}
+.pin{z-index:2}
+.drawhint{font-size:13px;color:#2563eb;font-weight:600}
+.bld{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px}
+.bld input{width:100%;border:1px solid transparent;font-weight:700;font-size:14px;padding:3px 4px;border-radius:5px}
+.bld input:hover,.bld input:focus{border-color:var(--line);outline:none}
+.bld small{display:block;color:var(--mut);margin:2px 4px 6px}
+.bact{display:flex;gap:6px;flex-wrap:wrap}
+.toolbar select{padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:#fff}
 /* Cloud */
 .sync{display:flex;align-items:center;gap:6px;background:transparent;border:1px solid #444;color:#cfd2d6;border-radius:16px;padding:5px 11px;font-size:12px;cursor:pointer;white-space:nowrap}
 .sync i{width:9px;height:9px;border-radius:50%;background:#888}
@@ -146,7 +168,10 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
   .floors .hd{margin:0}
   #floorList{display:flex;gap:6px}
   .fl{white-space:nowrap;margin:0;background:#fff;border:1px solid var(--line);gap:8px}
-  .floors .b{margin:0;width:auto}
+  .floors .b,.floors .b.addf,.floors>#floorList>.b.addf{margin:0;width:auto}
+  .grp{display:flex;align-items:center;gap:6px;margin:0}
+  .grp .fl{margin-left:0}
+  .gh{white-space:nowrap}
   .stage{flex:none;height:58vh;padding:10px}
   .side{border-left:0;border-top:1px solid var(--line);padding:14px 16px 40px}
   .thumbs{grid-template-columns:repeat(4,1fr)}
@@ -172,6 +197,7 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
   #print h2{font-size:16pt;border-bottom:1.5pt solid #c2410c;padding-bottom:2mm;margin:0 0 5mm}
   .pplan{position:relative;margin:0 auto;border:.3pt solid #999}
   .pplan img{display:block;width:100%}
+  .pplan .alabel{font-size:8pt;padding:1px 5px}
   .pplan .pin{width:20px;height:20px;margin:-10px 0 0 -10px;font-size:9px;line-height:16px;border-width:1.5px;box-shadow:none}
   .entry{margin-bottom:7mm}
   .eh{display:flex;align-items:center;gap:3mm;border-bottom:.3pt solid #bbb;padding-bottom:1.5mm;margin-bottom:2mm;break-after:avoid}
@@ -205,9 +231,8 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 
 <main id="v-plan" class="view">
   <aside class="floors">
-    <div class="hd">Geschosse</div>
+    <div class="hd">Pläne</div>
     <div id="floorList"></div>
-    <button class="b" data-act="addFloor">+ Geschoss</button>
   </aside>
   <section class="stagewrap">
     <div class="toolbar" id="planBar"></div>
@@ -249,30 +274,45 @@ function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;t.hidden=false
 
 /* ---------- Datenbank (IndexedDB, lokal im Browser) ---------- */
 let DB;
-function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('baustellenprotokoll',2);
-  r.onupgradeneeded=()=>{const d=r.result;for(const s of ['kv','floors','pins','belege','blobs','queue'])if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'})};
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('baustellenprotokoll',3);
+  r.onupgradeneeded=()=>{const d=r.result;for(const s of ['kv','floors','buildings','pins','belege','blobs','queue'])if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'})};
   r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)})}
 function tx(store,mode,fn){return new Promise((res,rej)=>{const t=DB.transaction(store,mode);const r=fn(t.objectStore(store));let out;if(r)r.onsuccess=()=>{out=r.result};t.oncomplete=()=>res(out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
 const dbAll=s=>tx(s,'readonly',st=>st.getAll());
 const rawPut=(s,v)=>tx(s,'readwrite',st=>st.put(v)).catch(e=>{alert('Speichern fehlgeschlagen: '+(e&&e.message||e));throw e});
 const rawDel=(s,id)=>tx(s,'readwrite',st=>st.delete(id));
 /* Jede Änderung wird lokal gespeichert UND für die Cloud vorgemerkt */
-const SYNC_KIND={floors:'floor',pins:'pin',belege:'beleg',kv:'project',blobs:'blob'};
-const STORE_OF={floor:'floors',pin:'pins',beleg:'belege',project:'kv',blob:'blobs'};
+const SYNC_KIND={buildings:'building',floors:'floor',pins:'pin',belege:'beleg',kv:'project',blobs:'blob'};
+const STORE_OF={building:'buildings',floor:'floors',pin:'pins',beleg:'belege',project:'kv',blob:'blobs'};
 async function enqueue(store,id,op){if(!cloudOn())return;await tx('queue','readwrite',st=>st.put({id:store+'|'+id,store,recId:id,op,t:Date.now()+Math.random()}));scheduleSync()}
 async function dbPut(s,v){await rawPut(s,v);if(SYNC_KIND[s]&&!(s==='kv'&&v.id!=='project'))await enqueue(s,v.id,'put')}
 async function dbDel(s,id){await rawDel(s,id);if(SYNC_KIND[s])await enqueue(s,id,'del')}
 const dbClear=s=>tx(s,'readwrite',st=>st.clear());
 
 /* ---------- Zustand ---------- */
-const S={project:{id:'project',name:'Baustellenprotokoll',address:'',author:'',period:''},floors:[],pins:[],belege:[],blobs:[]};
-const UI={tab:'plan',floor:null,pin:null,add:false,zoom:1,fy:'',fc:'',q:'',hl:null,opts:{plans:true,entries:true,list:true,att:true}};
+const S={project:{id:'project',name:'Baustellenprotokoll',address:'',author:'',period:''},floors:[],buildings:[],pins:[],belege:[],blobs:[]};
+const UI={tab:'plan',floor:null,pin:null,add:false,draw:null,zoom:1,fy:'',fc:'',q:'',hl:null,opts:{plans:true,entries:true,list:true,att:true}};
 const blobMap=new Map(), urls=new Map();
 const floorById=id=>S.floors.find(f=>f.id===id);
 const pinById=id=>S.pins.find(p=>p.id===id);
 const belegById=id=>S.belege.find(b=>b.id===id);
 const curFloor=()=>floorById(UI.floor);
 const floorsSorted=()=>[...S.floors].sort((a,b)=>a.order-b.order);
+const bldById=id=>S.buildings.find(b=>b.id===id);
+const bldsSorted=()=>[...S.buildings].sort((a,b)=>a.order-b.order);
+const siteFloor=()=>S.floors.find(f=>f.kind==='site');
+const isSite=f=>!!f&&f.kind==='site';
+const floorsOfBld=bid=>floorsSorted().filter(f=>!isSite(f)&&(f.buildingId||null)===(bid||null));
+const floorLabel=f=>{if(!f)return '';const b=!isSite(f)&&bldById(f.buildingId);return (b?b.name+' ':'')+f.name};
+const orderedFloors=()=>{const s=siteFloor();return [...(s?[s]:[]),...bldsSorted().flatMap(b=>floorsOfBld(b.id)),...floorsOfBld(null)]};
+const firstFloorId=()=>orderedFloors()[0]?.id||null;
+function inPoly(x,y,pts){let c=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const [xi,yi]=pts[i],[xj,yj]=pts[j];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c}return c}
+function centroid(pts){let a=0,cx=0,cy=0;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const f=pts[j][0]*pts[i][1]-pts[i][0]*pts[j][1];a+=f;cx+=(pts[j][0]+pts[i][0])*f;cy+=(pts[j][1]+pts[i][1])*f}
+  if(Math.abs(a)<1e-9)return [pts.reduce((s,p)=>s+p[0],0)/pts.length,pts.reduce((s,p)=>s+p[1],0)/pts.length];return [cx/(3*a),cy/(3*a)]}
+function areasHtml(f){if(!isSite(f))return '';const as=bldsSorted().filter(b=>b.area&&b.area.length>2);if(!as.length)return '';
+  const pt=a=>a.map(([x,y])=>(x*1000).toFixed(1)+','+(y*1000).toFixed(1)).join(' ');
+  return `<svg class="areas" viewBox="0 0 1000 1000" preserveAspectRatio="none">${as.map(b=>`<polygon points="${pt(b.area)}"/>`).join('')}</svg>`+
+    as.map(b=>{const c=centroid(b.area);return `<div class="alabel" style="left:${c[0]*100}%;top:${c[1]*100}%">🏠 ${esc(b.name)}<small>${floorsOfBld(b.id).length} Geschoss(e)</small></div>`}).join('')}
 const pinsOf=fid=>S.pins.filter(p=>p.floorId===fid).sort((a,b)=>a.nr-b.nr);
 const belegeSorted=()=>[...S.belege].sort((a,b)=>(a.date||'').localeCompare(b.date||'')||a.nr-b.nr);
 const belegLabel=b=>`B-${pad(b.nr)} ${b.supplier||b.desc||''}${b.amount!==''&&b.amount!=null?' · CHF '+chf(b.amount):''}`;
@@ -285,7 +325,7 @@ async function delBlobIfUnused(id){if(!id)return;
   const used=S.pins.some(p=>p.photoIds.includes(id))||S.belege.some(b=>b.fileId===id||b.previewId===id)||S.floors.some(f=>f.planId===id);
   if(used)return;await dbDel('blobs',id);const i=S.blobs.findIndex(b=>b.id===id);if(i>=0)S.blobs.splice(i,1);blobMap.delete(id);
   if(urls.has(id)){URL.revokeObjectURL(urls.get(id));urls.delete(id)}}
-function whereUsed(id){const p=S.pins.find(p=>p.photoIds.includes(id));if(p)return `${floorById(p.floorId)?.name||''}, Pin ${p.nr}`;
+function whereUsed(id){const p=S.pins.find(p=>p.photoIds.includes(id));if(p)return `${floorLabel(floorById(p.floorId))}, Pin ${p.nr}`;
   const b=S.belege.find(b=>b.fileId===id);if(b)return `Beleg B-${pad(b.nr)}`;return ''}
 
 /* ---------- Bilder, PDFs, Hash ---------- */
@@ -319,27 +359,42 @@ function render(){
 }
 function renderPlan(){renderFloorList();renderStage();renderPinPanel()}
 function renderFloorList(){
-  const fl=floorsSorted();
-  $('#floorList').innerHTML=fl.map(f=>`<div class="fl ${f.id===UI.floor?'on':''}" data-act="selFloor" data-id="${f.id}"><span>${esc(f.name)}</span><small>${S.pins.filter(p=>p.floorId===f.id).length}</small></div>`).join('')||'<p class="mut">Noch keine Geschosse.</p>';
+  const item=f=>`<div class="fl ${f.id===UI.floor?'on':''}" data-act="selFloor" data-id="${f.id}"><span>${esc(f.name)}</span><small>${S.pins.filter(p=>p.floorId===f.id).length}</small></div>`;
+  const s=siteFloor();
+  let h=s?`<div class="fl site ${s.id===UI.floor?'on':''}" data-act="selFloor" data-id="${s.id}"><span>🗺️ ${esc(s.name)}</span><small>${pinsOf(s.id).length}</small></div>`
+        :`<button class="b addf" data-act="addSite">+ Situationsplan</button>`;
+  for(const b of bldsSorted())h+=`<div class="grp"><div class="gh" data-act="openBld" data-id="${b.id}">🏠 ${esc(b.name)}</div>${floorsOfBld(b.id).map(item).join('')}<button class="b sm addf" data-act="addFloor" data-id="${b.id}">+ Geschoss</button></div>`;
+  const free=floorsOfBld(null);
+  if(free.length||!S.buildings.length)h+=`<div class="grp">${S.buildings.length?'<div class="gh">Ohne Gebäude</div>':''}${free.map(item).join('')}<button class="b sm addf" data-act="addFloor" data-id="">+ Geschoss</button></div>`;
+  h+=`<button class="b sm addf" data-act="addBld">+ Gebäude</button>`;
+  $('#floorList').innerHTML=h;
 }
 function renderStage(){
   const f=curFloor(),bar=$('#planBar'),st=$('#stage');
-  if(!f){bar.innerHTML='<span class="mut">Kein Geschoss ausgewählt</span>';st.innerHTML=`<div class="empty"><h3>Willkommen</h3><p>Lege zuerst ein Geschoss an (z.B. UG, EG, 1. OG, DG) und lade den Grundriss als Bild oder PDF hoch. Danach setzt du Pins direkt in den Plan.</p><button class="b p" data-act="addFloor">+ Geschoss anlegen</button></div>`;return}
-  bar.innerHTML=`<input class="fname" value="${esc(f.name)}" data-ch="renameFloor" title="Geschoss umbenennen">
-    <button class="b sm" data-act="up" title="Nach oben">▲</button><button class="b sm" data-act="down" title="Nach unten">▼</button><span class="sp"></span>
+  if(!f){bar.innerHTML='<span class="mut">Kein Plan ausgewählt</span>';st.innerHTML=`<div class="empty"><h3>Willkommen</h3><p>Beginne mit dem <b>Situationsplan</b>: Darauf umrandest du das Haus und gelangst mit einem Tipp zu dessen Grundrissen. Du kannst auch direkt ein Geschoss anlegen.</p><p><button class="b p" data-act="addSite">+ Situationsplan</button> <button class="b" data-act="addFloor">+ Geschoss</button></p></div>`;return}
+  const site=isSite(f),drawing=site&&UI.draw;
+  const nav=!site&&siteFloor()?`<button class="b sm" data-act="toSite" title="Zurück zum Situationsplan">‹ Situationsplan</button>`:'';
+  const bsel=!site&&S.buildings.length?`<select data-ch="floorBld" title="Gehört zu Gebäude"><option value="">Ohne Gebäude</option>${bldsSorted().map(b=>`<option value="${b.id}" ${f.buildingId===b.id?'selected':''}>🏠 ${esc(b.name)}</option>`).join('')}</select>`:'';
+  bar.innerHTML=drawing?`<span class="drawhint">✏️ ${UI.draw.bid?'Neue Fläche für «'+esc(bldById(UI.draw.bid)?.name||'')+'»: ':''}Ecken des Gebäudes nacheinander antippen (${UI.draw.pts.length} Punkte)</span><span class="sp"></span>
+      <button class="b" data-act="drawUndo" ${UI.draw.pts.length?'':'disabled'}>↶ Zurück</button><button class="b p" data-act="drawDone" ${UI.draw.pts.length>2?'':'disabled'}>✓ Fertig</button><button class="b" data-act="drawCancel">Abbrechen</button>`
+    :`${nav}<input class="fname" value="${esc(f.name)}" data-ch="renameFloor" title="Umbenennen">${bsel}
+    ${site?'':'<button class="b sm" data-act="up" title="Nach oben">▲</button><button class="b sm" data-act="down" title="Nach unten">▼</button>'}<span class="sp"></span>
     ${f.planId?`<button class="b sm" data-act="zout" title="Verkleinern">−</button><span class="zv">${Math.round(UI.zoom*100)}%</span><button class="b sm" data-act="zin" title="Vergrössern">+</button>
-    <button class="b ${UI.add?'p':''}" data-act="addPin">${UI.add?'Jetzt in den Plan klicken … (Esc)':'📍 Pin setzen'}</button>`:''}
-    <button class="b" data-act="planUp">${f.planId?'Grundriss ersetzen':'Grundriss hochladen'}</button>
-    <button class="b d" data-act="delFloor">Geschoss löschen</button>`;
-  if(!f.planId){st.innerHTML=`<div class="empty"><p>Für «${esc(f.name)}» ist noch kein Grundriss hinterlegt.</p><button class="b p" data-act="planUp">Grundriss hochladen (Bild oder PDF)</button></div>`;return}
-  st.innerHTML=`<div class="plan ${UI.add?'adding':''}" style="width:${UI.zoom*100}%"><img src="${urlOf(f.planId)}" alt="Grundriss" draggable="false">${pinsOf(f.id).map(p=>`<div class="pin ${p.id===UI.pin?'on':''}" data-pin="${p.id}" style="left:${p.x*100}%;top:${p.y*100}%" title="${esc(p.title)}">${p.nr}</div>`).join('')}</div>`;
+    <button class="b ${UI.add?'p':''}" data-act="addPin">${UI.add?'Jetzt in den Plan klicken … (Esc)':'📍 Pin setzen'}</button>
+    ${site?'<button class="b" data-act="markBld">🏠 Gebäude markieren</button>':''}`:''}
+    <button class="b" data-act="planUp">${f.planId?'Plan ersetzen':'Plan hochladen'}</button>
+    <button class="b d" data-act="delFloor">Löschen</button>`;
+  if(!f.planId){st.innerHTML=`<div class="empty"><p>Für «${esc(f.name)}» ist noch kein Plan hinterlegt.</p><button class="b p" data-act="planUp">Plan hochladen (Bild oder PDF)</button></div>`;return}
+  const dr=drawing&&UI.draw.pts.length?`<svg class="areas" viewBox="0 0 1000 1000" preserveAspectRatio="none"><polygon class="dr" points="${UI.draw.pts.map(([x,y])=>(x*1000).toFixed(1)+','+(y*1000).toFixed(1)).join(' ')}"/></svg>${UI.draw.pts.map(([x,y])=>`<span class="dot" style="left:${x*100}%;top:${y*100}%"></span>`).join('')}`:'';
+  st.innerHTML=`<div class="plan ${UI.add||drawing?'adding':''}" style="width:${UI.zoom*100}%"><img src="${urlOf(f.planId)}" alt="Plan" draggable="false">${areasHtml(f)}${dr}${pinsOf(f.id).map(p=>`<div class="pin ${p.id===UI.pin?'on':''}" data-pin="${p.id}" style="left:${p.x*100}%;top:${p.y*100}%" title="${esc(p.title)}">${p.nr}</div>`).join('')}</div>`;
 }
 function renderPinPanel(){
   const el=$('#pinPanel'),p=pinById(UI.pin);
   if(!curFloor()){el.innerHTML='';return}
   if(!p||p.floorId!==UI.floor){
-    const pins=pinsOf(UI.floor);
-    el.innerHTML=`<div class="hd">Einträge ${esc(curFloor().name)}</div>${pins.length?pins.map(x=>`<div class="pli" data-act="selPin" data-id="${x.id}"><b>${x.nr}</b><span>${esc(x.title||'(ohne Titel)')}<small>${fmtDate(x.date)} · ${x.photoIds.length} Foto(s)${x.belegIds.length?' · '+x.belegIds.length+' Beleg(e)':''}</small></span></div>`).join(''):'<p class="mut">Noch keine Pins. Klicke oben auf «📍 Pin setzen» und dann auf die Stelle im Grundriss.</p>'}`;
+    const pins=pinsOf(UI.floor),cf=curFloor();
+    const bl=isSite(cf)?`<div class="hd">Gebäude</div>${bldsSorted().map(b=>`<div class="bld"><input data-bld="${b.id}" value="${esc(b.name)}" title="Umbenennen"><small>${floorsOfBld(b.id).length} Geschoss(e)${b.area?'':' · noch keine Fläche'}</small><div class="bact"><button class="b sm" data-act="openBld" data-id="${b.id}">Öffnen</button><button class="b sm" data-act="redraw" data-id="${b.id}">Fläche ${b.area?'neu ':''}zeichnen</button><button class="b sm d" data-act="delBld" data-id="${b.id}">Löschen</button></div></div>`).join('')||'<p class="mut">Noch keine Gebäude. Tippe oben auf «🏠 Gebäude markieren» und dann auf die Ecken des Hauses.</p>'}<div style="height:14px"></div>`:'';
+    el.innerHTML=`${bl}<div class="hd">Einträge ${esc(floorLabel(cf))}</div>${pins.length?pins.map(x=>`<div class="pli" data-act="selPin" data-id="${x.id}"><b>${x.nr}</b><span>${esc(x.title||'(ohne Titel)')}<small>${fmtDate(x.date)} · ${x.photoIds.length} Foto(s)${x.belegIds.length?' · '+x.belegIds.length+' Beleg(e)':''}</small></span></div>`).join(''):'<p class="mut">Noch keine Pins. Klicke oben auf «📍 Pin setzen» und dann auf die Stelle im Grundriss.</p>'}`;
     return}
   const linked=p.belegIds.map(belegById).filter(Boolean);
   const avail=belegeSorted().filter(b=>!p.belegIds.includes(b.id));
@@ -360,7 +415,7 @@ function filteredBelege(){const q=UI.q.trim().toLowerCase();
 function renderBelege(){
   const years=[...new Set(S.belege.map(b=>(b.date||'').slice(0,4)).filter(Boolean))].sort();
   const list=filteredBelege();const sum=list.reduce((s,b)=>s+(+b.amount||0),0);
-  const fn=id=>floorById(id)?.name||'';
+  const fn=id=>floorLabel(floorById(id));
   $('#v-belege').innerHTML=`<div class="bbar"><label class="b p">📷 Beleg fotografieren<input type="file" accept="image/*" capture="environment" hidden data-up="belege"></label><label class="b">+ Fotos / PDFs<input type="file" accept="image/*,application/pdf" multiple hidden data-up="belege"></label>
     <select data-ch="fy"><option value="">Alle Jahre</option>${years.map(y=>`<option ${UI.fy===y?'selected':''}>${y}</option>`).join('')}</select>
     <select data-ch="fc"><option value="">Alle Kategorien</option>${CATS.map(c=>`<option ${UI.fc===c?'selected':''}>${c}</option>`).join('')}</select>
@@ -438,14 +493,42 @@ async function addBelege(files){let n=0;
     const b={id:uid(),nr:Math.max(0,...S.belege.map(x=>x.nr))+1,date:isoDate(new Date(f.lastModified||Date.now())),supplier:'',desc:f.name.replace(/\.[^.]+$/,''),category:'Material',amount:'',by:SES?SES.email:'',fileId:fileRec.id,previewId:prev?prev.id:null};
     S.belege.push(b);await dbPut('belege',b)}
   toast(n?'Belege gespeichert – bitte Datum, Lieferant und Betrag ergänzen':'Keine Bilder oder PDFs gefunden',4000);render()}
-async function moveFloor(dir){const fl=floorsSorted();const i=fl.findIndex(f=>f.id===UI.floor);const j=i+dir;if(i<0||j<0||j>=fl.length)return;
+async function moveFloor(dir){const cf=curFloor();if(!cf||isSite(cf))return;const fl=floorsOfBld(cf.buildingId);const i=fl.findIndex(f=>f.id===UI.floor);const j=i+dir;if(i<0||j<0||j>=fl.length)return;
   const a=fl[i],b=fl[j];[a.order,b.order]=[b.order,a.order];await dbPut('floors',a);await dbPut('floors',b);renderPlan()}
 
+async function createBld(name,area){const b={id:uid(),name,order:Math.max(0,...S.buildings.map(x=>x.order))+1,area};S.buildings.push(b);await dbPut('buildings',b);
+  const free=floorsOfBld(null);
+  if(S.buildings.length===1&&free.length&&confirm(`Die bestehenden Geschosse (${free.map(f=>f.name).join(', ')}) dem Gebäude «${name}» zuordnen?`))for(const f of free){f.buildingId=b.id;await dbPut('floors',f)}
+  return b}
 const ACT={
-  tab:id=>{UI.tab=id;UI.add=false;render()},
-  addFloor:async()=>{const name=prompt('Name des Geschosses (z.B. UG, EG, 1. OG, DG):');if(!name||!name.trim())return;
-    const f={id:uid(),name:name.trim(),order:Math.max(0,...S.floors.map(x=>x.order))+1,planId:null};S.floors.push(f);await dbPut('floors',f);UI.floor=f.id;UI.pin=null;UI.add=false;renderPlan()},
-  selFloor:id=>{UI.floor=id;UI.pin=null;UI.add=false;UI.zoom=1;renderPlan()},
+  tab:id=>{UI.tab=id;UI.add=false;UI.draw=null;render()},
+  addFloor:async id=>{const cf=curFloor();const bid=id===undefined?((cf&&!isSite(cf)&&cf.buildingId)||null):(id||null);const bn=bid?bldById(bid)?.name:'';
+    const name=prompt(`Name des Geschosses${bn?' in «'+bn+'»':''} (z.B. UG, EG, 1. OG, DG):`);if(!name||!name.trim())return;
+    const f={id:uid(),name:name.trim(),order:Math.max(0,...S.floors.map(x=>x.order))+1,planId:null,buildingId:bid};S.floors.push(f);await dbPut('floors',f);UI.floor=f.id;UI.pin=null;UI.add=false;renderPlan()},
+  selFloor:id=>{UI.floor=id;UI.pin=null;UI.add=false;UI.draw=null;UI.zoom=1;renderPlan()},
+  toSite:()=>{const s=siteFloor();if(s)ACT.selFloor(s.id)},
+  addSite:async()=>{let s=siteFloor();if(s)return ACT.selFloor(s.id);
+    s={id:uid(),name:'Situationsplan',kind:'site',order:-1,planId:null,buildingId:null};S.floors.push(s);UI.floor=s.id;UI.pin=null;UI.add=false;UI.draw=null;UI.zoom=1;
+    $('#planInput').click();await dbPut('floors',s);renderPlan()},
+  openBld:async id=>{const b=bldById(id);if(!b)return;const fl=floorsOfBld(id);
+    if(fl.length)return ACT.selFloor(fl[0].id);
+    if(confirm(`«${b.name}» hat noch keine Geschosse. Jetzt eines anlegen?`))ACT.addFloor(id)},
+  addBld:async()=>{const name=prompt('Name des Gebäudes (z.B. Haus, Garage, Schopf):',S.buildings.length?'':'Haus');if(!name||!name.trim())return;
+    const b=await createBld(name.trim(),null);
+    const s=siteFloor();if(s&&s.planId&&confirm(`Möchtest du «${b.name}» jetzt auf dem Situationsplan umranden?`)){UI.floor=s.id;UI.pin=null;UI.add=false;UI.draw={bid:b.id,pts:[]};UI.zoom=1}
+    renderPlan()},
+  markBld:()=>{UI.add=false;UI.pin=null;UI.draw={bid:null,pts:[]};renderPlan();toast('Tippe nacheinander auf die Ecken des Gebäudes, dann «✓ Fertig».',5000)},
+  redraw:id=>{const s=siteFloor();if(!s||!s.planId)return toast('Zuerst einen Situationsplan hochladen.');UI.floor=s.id;UI.pin=null;UI.add=false;UI.draw={bid:id,pts:[]};renderPlan()},
+  drawUndo:()=>{if(UI.draw){UI.draw.pts.pop();renderStage()}},
+  drawCancel:()=>{UI.draw=null;renderPlan()},
+  drawDone:async()=>{const d=UI.draw;if(!d||d.pts.length<3)return toast('Mindestens 3 Ecken antippen.');
+    let b=d.bid&&bldById(d.bid);
+    if(!b){const name=prompt('Name des Gebäudes (z.B. Haus, Garage, Schopf):',S.buildings.some(x=>x.name==='Haus')?'':'Haus');if(!name||!name.trim())return;
+      b=S.buildings.find(x=>x.name.trim().toLowerCase()===name.trim().toLowerCase())||await createBld(name.trim(),null)}
+    b.area=d.pts.map(([x,y])=>[+x.toFixed(4),+y.toFixed(4)]);await dbPut('buildings',b);UI.draw=null;renderPlan();toast(`«${b.name}» markiert – antippen, um die Grundrisse zu öffnen.`,4000)},
+  delBld:async id=>{const b=bldById(id);if(!b)return;const fl=floorsOfBld(id);
+    if(!confirm(`Gebäude «${b.name}» löschen?${fl.length?`\n\nDie ${fl.length} Geschoss(e) mit allen Pins bleiben erhalten und erscheinen unter «Ohne Gebäude».`:''}`))return;
+    for(const f of fl){f.buildingId=null;await dbPut('floors',f)}S.buildings=S.buildings.filter(x=>x.id!==id);await dbDel('buildings',id);renderPlan()},
   up:()=>moveFloor(-1),down:()=>moveFloor(1),
   zin:()=>applyZoom(UI.zoom*1.25),
   zout:()=>applyZoom(UI.zoom/1.25),
@@ -455,7 +538,7 @@ const ACT={
     const pins=pinsOf(f.id);S.pins=S.pins.filter(p=>p.floorId!==f.id);S.floors=S.floors.filter(x=>x.id!==f.id);
     for(const p of pins)await dbDel('pins',p.id);await dbDel('floors',f.id);
     for(const p of pins)for(const id of p.photoIds)await delBlobIfUnused(id);await delBlobIfUnused(f.planId);
-    UI.floor=floorsSorted()[0]?.id||null;UI.pin=null;renderPlan()},
+    UI.floor=firstFloorId();UI.pin=null;renderPlan()},
   selPin:id=>{UI.pin=id;renderPlan()},
   closePin:()=>{UI.pin=null;renderPlan()},
   zoomImg:id=>showImg(id),
@@ -477,6 +560,7 @@ const ACT={
   backup:()=>doBackup(),
 };
 const CH={
+  floorBld:async v=>{const f=curFloor();if(!f)return;f.buildingId=v||null;await dbPut('floors',f);renderPlan()},
   renameFloor:async v=>{const f=curFloor();if(!v.trim())return renderStage();f.name=v.trim();await dbPut('floors',f);renderFloorList()},
   link:async v=>{if(!v)return;const p=pinById(UI.pin);p.belegIds.push(v);await dbPut('pins',p);renderPlan()},
   fy:v=>{UI.fy=v;renderBelege()},fc:v=>{UI.fc=v;renderBelege()},q:v=>{UI.q=v;renderBelege()},
@@ -489,6 +573,7 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(d.up){const files=[...t.files];t.value='';if(files.length)await UP[d.up](files);return}
   if(d.ch&&CH[d.ch]){CH[d.ch](t.value,t);return}
   if(d.opt){UI.opts[d.opt]=t.checked;return}
+  if(d.bld){const b=bldById(d.bld);if(!b||!t.value.trim())return renderPlan();b.name=t.value.trim();await dbPut('buildings',b);renderFloorList();renderStage();return}
   if(d.pf){S.project[d.pf]=t.value;await dbPut('kv',S.project);if(d.pf==='name')document.querySelectorAll('[data-pf="name"]').forEach(i=>{if(i!==t)i.value=t.value});return}
   if(d.bf){const b=belegById(t.closest('tr').dataset.id);if(!b)return;
     if(d.bf==='amount'){b.amount=parseAmount(t.value);t.value=b.amount===''?'':chf(b.amount)}else b[d.bf]=t.value;
@@ -497,7 +582,7 @@ const saveTimers={};
 document.addEventListener('input',e=>{const t=e.target;if(!t.dataset.f)return;const p=pinById(UI.pin);if(!p)return;p[t.dataset.f]=t.value;
   clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);
   if(t.dataset.f==='title'){const el=document.querySelector(`.pin[data-pin="${p.id}"]`);if(el)el.title=t.value}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#lb').hidden)$('#lb').hidden=true;else if(UI.add){UI.add=false;renderStage()}}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#lb').hidden)$('#lb').hidden=true;else if(UI.draw){UI.draw=null;renderPlan()}else if(UI.add){UI.add=false;renderStage()}}});
 window.addEventListener('beforeunload',()=>{for(const id in saveTimers){clearTimeout(saveTimers[id]);const p=pinById(id);if(p)dbPut('pins',p)}});
 
 /* Pins setzen und verschieben */
@@ -535,7 +620,10 @@ $('#stage').addEventListener('pointermove',e=>{
   if(!tap&&ptrs.size===1){st.scrollLeft-=dx;st.scrollTop-=dy}
 });
 function ptrEnd(e){if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
-  if(e.type==='pointerup'&&tap&&tap.id===e.pointerId&&UI.add){const plan=$('#stage .plan');if(plan){const r=plan.getBoundingClientRect();addPinAt(clamp((e.clientX-r.left)/r.width),clamp((e.clientY-r.top)/r.height))}}
+  if(e.type==='pointerup'&&tap&&tap.id===e.pointerId){const plan=$('#stage .plan');if(plan){const r=plan.getBoundingClientRect();const x=clamp((e.clientX-r.left)/r.width),y=clamp((e.clientY-r.top)/r.height),f=curFloor();
+    if(UI.draw&&isSite(f)){UI.draw.pts.push([x,y]);renderStage()}
+    else if(UI.add)addPinAt(x,y);
+    else if(isSite(f)){const b=bldsSorted().find(b=>b.area&&b.area.length>2&&inPoly(x,y,b.area));if(b)ACT.openBld(b.id)}}}
   if(ptrs.size===0)tap=null}
 $('#stage').addEventListener('pointerup',ptrEnd);$('#stage').addEventListener('pointercancel',ptrEnd);
 $('#stage').addEventListener('wheel',e=>{if(!e.ctrlKey||!$('#stage .plan'))return;e.preventDefault();applyZoom(UI.zoom*Math.exp(-e.deltaY/150),e.clientX,e.clientY)},{passive:false});
@@ -543,22 +631,22 @@ $('#stage').addEventListener('wheel',e=>{if(!e.ctrlKey||!$('#stage .plan'))retur
 /* ---------- PDF-Export ---------- */
 async function doPrint(){
   const missing=S.blobs.filter(b=>!b.blob).length;if(missing&&!confirm(`${missing} Foto(s)/Beleg(e) sind noch nicht auf dieses Gerät geladen und würden im PDF fehlen. Trotzdem fortfahren?`))return;
-  const o=UI.opts,P=S.project,fl=floorsSorted();toast('PDF wird vorbereitet …',60000);
+  const o=UI.opts,P=S.project,fl=orderedFloors();toast('PDF wird vorbereitet …',60000);
   let h=`<section class="cover"><h1>${esc(P.name||'Baustellenprotokoll')}</h1>${P.address?`<p class="addr">${esc(P.address)}</p>`:''}<table>
    ${P.period?`<tr><td>Zeitraum</td><td>${esc(P.period)}</td></tr>`:''}${P.author?`<tr><td>Verfasser</td><td>${esc(P.author)}</td></tr>`:''}
    <tr><td>Erstellt am</td><td>${fmtDate(today())}</td></tr>
    <tr><td>Umfang</td><td>${fl.length} Geschoss(e) · ${S.pins.length} Einträge · ${S.pins.reduce((s,p)=>s+p.photoIds.length,0)} Fotos · ${S.belege.length} Belege</td></tr>
    ${S.belege.length?`<tr><td>Total Belege</td><td>CHF ${chf(S.belege.reduce((s,b)=>s+(+b.amount||0),0))}</td></tr>`:''}</table>
-   <h3>Inhalt</h3><ol>${fl.map(f=>`<li>${esc(f.name)} (${pinsOf(f.id).length} Einträge)</li>`).join('')}${o.list&&S.belege.length?'<li>Belegliste</li>':''}${o.att&&S.belege.length?'<li>Anhang: Belege</li>':''}</ol></section>`;
+   <h3>Inhalt</h3><ol>${fl.map(f=>`<li>${esc(floorLabel(f))} (${pinsOf(f.id).length} Einträge)</li>`).join('')}${o.list&&S.belege.length?'<li>Belegliste</li>':''}${o.att&&S.belege.length?'<li>Anhang: Belege</li>':''}</ol></section>`;
   for(const f of fl){const pins=pinsOf(f.id);
     if(o.plans&&f.planId){const b=blobMap.get(f.planId)||{};const w=b.w||1,hh=b.h||1;const wmm=Math.min(184,240*w/hh);
-      h+=`<section class="pg"><h2>${esc(f.name)} – Grundriss</h2><div class="pplan" style="width:${wmm.toFixed(1)}mm"><img src="${urlOf(f.planId)}" alt="">${pins.map(p=>`<span class="pin" style="left:${p.x*100}%;top:${p.y*100}%">${p.nr}</span>`).join('')}</div></section>`}
-    if(o.entries&&pins.length){h+=`<section class="pg"><h2>${esc(f.name)} – Einträge</h2>${pins.map(p=>{const bl=p.belegIds.map(belegById).filter(Boolean);
+      h+=`<section class="pg"><h2>${esc(floorLabel(f))}${isSite(f)?'':' – Grundriss'}</h2><div class="pplan" style="width:${wmm.toFixed(1)}mm"><img src="${urlOf(f.planId)}" alt="">${areasHtml(f)}${pins.map(p=>`<span class="pin" style="left:${p.x*100}%;top:${p.y*100}%">${p.nr}</span>`).join('')}</div></section>`}
+    if(o.entries&&pins.length){h+=`<section class="pg"><h2>${esc(floorLabel(f))} – Einträge</h2>${pins.map(p=>{const bl=p.belegIds.map(belegById).filter(Boolean);
       return `<div class="entry"><div class="eh"><span class="enr">${p.nr}</span><b>${esc(p.title||'Ohne Titel')}</b><span class="ed">${fmtDate(p.date)}</span></div>
       ${p.note?`<p>${nl2br(p.note)}</p>`:''}${p.material?`<p><i>Material:</i> ${nl2br(p.material)}</p>`:''}${bl.length?`<p><i>Belege:</i> ${bl.map(b=>esc(belegLabel(b))).join('; ')}</p>`:''}
       ${p.photoIds.length?`<div class="eph">${p.photoIds.map(id=>`<img src="${urlOf(id)}" alt="">`).join('')}</div>`:''}</div>`}).join('')}</section>`}}
   const bs=belegeSorted();
-  if(o.list&&bs.length){const fn=id=>floorById(id)?.name||'';
+  if(o.list&&bs.length){const fn=id=>floorLabel(floorById(id));
     h+=`<section class="blist"><h2>Belegliste</h2><table><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Kategorie</th><th>Pins</th><th style="text-align:right">CHF</th></tr></thead><tbody>
     ${bs.map(b=>`<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.category)}</td><td>${S.pins.filter(p=>p.belegIds.includes(b.id)).map(p=>esc(fn(p.floorId))+' '+p.nr).join(', ')}</td><td style="text-align:right">${b.amount===''?'':chf(b.amount)}</td></tr>`).join('')}
     <tr class="tot"><td colspan="6">Total</td><td style="text-align:right">${chf(bs.reduce((s,b)=>s+(+b.amount||0),0))}</td></tr></tbody></table>
@@ -576,7 +664,7 @@ async function doPrint(){
 const toDataURL=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(b)});
 function fromDataURL(u){const i=u.indexOf(',');const mime=(u.slice(0,i).match(/:(.*?);/)||[])[1]||'application/octet-stream';const bin=atob(u.slice(i+1));const a=new Uint8Array(bin.length);for(let k=0;k<bin.length;k++)a[k]=bin.charCodeAt(k);return new Blob([a],{type:mime})}
 async function doBackup(){toast('Sicherung wird erstellt …',60000);
-  try{const parts=[`{"app":"baustellenprotokoll","version":1,"date":${JSON.stringify(new Date().toISOString())},"project":${JSON.stringify(S.project)},"floors":${JSON.stringify(S.floors)},"pins":${JSON.stringify(S.pins)},"belege":${JSON.stringify(S.belege)},"blobs":[`];
+  try{const parts=[`{"app":"baustellenprotokoll","version":1,"date":${JSON.stringify(new Date().toISOString())},"project":${JSON.stringify(S.project)},"floors":${JSON.stringify(S.floors)},"buildings":${JSON.stringify(S.buildings)},"pins":${JSON.stringify(S.pins)},"belege":${JSON.stringify(S.belege)},"blobs":[`];
     let first=true;for(const b of S.blobs){if(!b.blob)continue;const {blob,...meta}=b;parts.push((first?'':',')+JSON.stringify(Object.assign(meta,{data:await toDataURL(blob)})));first=false}
     parts.push(']}');const out=new Blob(parts,{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(out);
     a.download=`Sicherung ${(S.project.name||'Baustellenprotokoll').replace(/[\\/:*?"<>|]/g,'')} ${today()}.json`;document.body.appendChild(a);a.click();a.remove();
@@ -587,12 +675,12 @@ async function doRestore(file){if(!file)return;
   if(d.app!=='baustellenprotokoll'){alert('Die Datei ist keine Sicherung des Baustellenprotokolls.');return}
   if(!confirm(`Sicherung vom ${fmtDate((d.date||'').slice(0,10))} laden?\n\n${(d.floors||[]).length} Geschosse, ${(d.pins||[]).length} Pins, ${(d.belege||[]).length} Belege.\n\nDie aktuellen Daten in diesem Browser werden dabei ersetzt.`))return;
   toast('Sicherung wird geladen …',60000);
-  try{for(const s of ['kv','floors','pins','belege','blobs'])await dbClear(s);
+  try{for(const s of ['kv','floors','buildings','pins','belege','blobs'])await dbClear(s);
     for(const u of urls.values())URL.revokeObjectURL(u);urls.clear();blobMap.clear();
-    S.project=Object.assign({id:'project'},d.project||{});S.floors=d.floors||[];S.pins=d.pins||[];S.belege=d.belege||[];S.blobs=[];
-    await dbPut('kv',S.project);for(const f of S.floors)await dbPut('floors',f);for(const p of S.pins)await dbPut('pins',p);for(const b of S.belege)await dbPut('belege',b);
+    S.project=Object.assign({id:'project'},d.project||{});S.floors=d.floors||[];S.buildings=d.buildings||[];S.pins=d.pins||[];S.belege=d.belege||[];S.blobs=[];
+    await dbPut('kv',S.project);for(const f of S.floors)await dbPut('floors',f);for(const x of S.buildings)await dbPut('buildings',x);for(const p of S.pins)await dbPut('pins',p);for(const b of S.belege)await dbPut('belege',b);
     for(const r of d.blobs||[]){const {data,...meta}=r;const rec=Object.assign(meta,{blob:fromDataURL(data)});await dbPut('blobs',rec);S.blobs.push(rec);blobMap.set(rec.id,rec)}
-    UI.floor=floorsSorted()[0]?.id||null;UI.pin=null;render();toast('Sicherung geladen',3000);const m=await syncMeta();m.lastPull=null;await rawPut('kv',m);syncNow()}
+    UI.floor=firstFloorId();UI.pin=null;render();toast('Sicherung geladen',3000);const m=await syncMeta();m.lastPull=null;await rawPut('kv',m);syncNow()}
   catch(e){console.error(e);alert('Fehler beim Laden: '+e.message)}}
 
 /* ---------- Cloud (Supabase) ---------- */
@@ -625,7 +713,7 @@ const blobMeta=r=>{const {blob,id,...m}=r;return m};
 
 async function firstUpload(){if(SYNCMETA.initialized)return;
   const hasData=S.floors.length||S.pins.length||S.belege.length;
-  if(hasData){await enqueue('kv','project','put');for(const st of ['blobs','floors','belege','pins'])for(const r of S[st])await enqueue(st,r.id,'put')}
+  if(hasData){await enqueue('kv','project','put');for(const st of ['blobs','buildings','floors','belege','pins'])for(const r of S[st])await enqueue(st,r.id,'put')}
   SYNCMETA.initialized=true;await rawPut('kv',SYNCMETA)}
 async function push(){
   const q=(await dbAll('queue')).sort((a,b)=>a.t-b.t);if(!q.length)return;
@@ -659,7 +747,7 @@ async function pull(){
     for(const r of rows){if(!maxT||new Date(r.updated_at)>new Date(maxT))maxT=r.updated_at;if(await applyRemote(r,pending))changed=true}
     if(rows.length<1000)break;off+=1000}
   SYNCMETA.lastPull=maxT;await rawPut('kv',SYNCMETA);
-  if(changed){if(UI.floor&&!curFloor())UI.floor=floorsSorted()[0]?.id||null;else if(!UI.floor)UI.floor=floorsSorted()[0]?.id||null;softRender()}}
+  if(changed){if(!curFloor())UI.floor=firstFloorId();softRender()}}
 let dlRunning=false;
 async function downloadMissing(){if(dlRunning)return;dlRunning=true;let n=0,last=Date.now();
   try{for(const rec of S.blobs.filter(b=>!b.blob)){if(!SES||!navigator.onLine)break;
@@ -690,18 +778,18 @@ async function logout(){const q=await queueCount();
   if(q&&!confirm(`${q} Änderung(en) sind noch nicht hochgeladen und gehen beim Abmelden verloren. Trotzdem abmelden?`))return;
   if(!q&&!confirm('Abmelden? Die Daten auf diesem Gerät werden entfernt, in der Cloud bleiben sie erhalten.'))return;
   try{fetch(CFG.url+'/auth/v1/logout',{method:'POST',headers:{apikey:CFG.key,Authorization:'Bearer '+SES.access_token}})}catch(e){}
-  for(const s of ['kv','floors','pins','belege','blobs','queue'])await dbClear(s);
+  for(const s of ['kv','floors','buildings','pins','belege','blobs','queue'])await dbClear(s);
   SES=null;saveSes();location.reload()}
 
 /* ---------- Start ---------- */
 (async()=>{
   try{await openDB()}catch(e){document.body.innerHTML='<p style="padding:40px">Der Browser erlaubt hier keine lokale Datenbank. Bitte die Datei mit Chrome oder Safari öffnen.</p>';return}
-  const [kv,f,p,b,bl]=await Promise.all(['kv','floors','pins','belege','blobs'].map(dbAll));
+  const [kv,f,p,b,bl,bd]=await Promise.all(['kv','floors','pins','belege','blobs','buildings'].map(dbAll));
   const pr=kv.find(x=>x.id==='project');if(pr)S.project=Object.assign(S.project,pr);
   SYNCMETA=kv.find(x=>x.id==='sync')||{id:'sync',lastPull:null,initialized:false};
-  S.floors=f;S.pins=p;S.belege=b;S.blobs=bl;bl.forEach(x=>blobMap.set(x.id,x));
+  S.floors=f;S.buildings=bd;S.pins=p;S.belege=b;S.blobs=bl;bl.forEach(x=>blobMap.set(x.id,x));
   for(const x of S.pins){x.photoIds=x.photoIds||[];x.belegIds=x.belegIds||[]}
-  UI.floor=floorsSorted()[0]?.id||null;
+  UI.floor=firstFloorId();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
   if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(e=>console.warn(e));
   render();
