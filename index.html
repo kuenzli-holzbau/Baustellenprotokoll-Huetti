@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Baustellenprotokoll</title>
+<meta name="theme-color" content="#1f2328">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#f4f2ee;--panel:#fff;--ink:#1f2328;--mut:#6b6f76;--line:#e2ded6;--acc:#c2410c;--acc2:#fff3ec}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;align-items:center;gap:14px;padding:8px 16px;background:#1f2328;color:#fff;position:sticky;top:0;z-index:20;height:54px}
+header .logo{font-size:20px}
+header input{background:transparent;border:1px solid transparent;color:#fff;font-size:17px;font-weight:600;padding:4px 8px;border-radius:6px;min-width:260px}
+header input:hover,header input:focus{border-color:#555;outline:none}
+nav{display:flex;gap:4px;margin-left:auto}
+nav button{background:transparent;color:#cfd2d6;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:14px}
+nav button:hover{color:#fff}
+nav button.on{background:#fff;color:#1f2328;font-weight:600}
+.b{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--line);padding:6px 12px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--ink);white-space:nowrap;font-family:inherit}
+.b:hover{border-color:#b9b4aa}
+.b.p{background:var(--acc);border-color:var(--acc);color:#fff}
+.b.p:hover{background:#9a3412}
+.b.d{color:#b91c1c}
+.b.sm{padding:2px 8px}
+.b.big{font-size:15px;padding:10px 18px}
+.mut{color:var(--mut)}
+.c{text-align:center}
+.sp{flex:1}
+input,textarea,select{font:inherit;color:inherit}
+label{display:block;margin:0 0 12px;font-size:12px;color:var(--mut);font-weight:600}
+label input,label textarea,label select{display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:#fff;font-size:14px;font-weight:400;color:var(--ink)}
+textarea{resize:vertical}
+.lbl{font-size:12px;color:var(--mut);font-weight:600;margin:0 0 6px}
+
+/* Grundrisse */
+#v-plan{display:grid;grid-template-columns:210px 1fr 350px;height:calc(100vh - 54px)}
+.floors{border-right:1px solid var(--line);background:#faf9f6;padding:12px;overflow:auto}
+.hd{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.fl{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:7px;cursor:pointer;margin-bottom:2px}
+.fl:hover{background:#efece6}
+.fl.on{background:var(--acc2);color:var(--acc);font-weight:600}
+.fl small{background:#e6e2da;color:#555;border-radius:10px;padding:0 7px;font-size:11px}
+.floors .b{margin-top:8px;width:100%;justify-content:center}
+.stagewrap{display:flex;flex-direction:column;min-width:0;min-height:0}
+.toolbar{display:flex;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);background:#fff;flex-wrap:wrap;min-height:50px}
+.toolbar .fname{font-weight:700;font-size:15px;border:1px solid transparent;border-radius:6px;padding:4px 6px;width:170px;background:transparent}
+.toolbar .fname:hover,.toolbar .fname:focus{border-color:var(--line);outline:none}
+.zv{min-width:44px;text-align:center;font-size:12px;color:var(--mut)}
+.stage{flex:1;overflow:auto;padding:18px;background:#e7e3db}
+.plan{position:relative;margin:0 auto;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.18);user-select:none;-webkit-user-select:none}
+.plan img{display:block;width:100%;pointer-events:none}
+.plan.adding{cursor:crosshair}
+.pin{position:absolute;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;background:var(--acc);color:#fff;font:700 12px/24px -apple-system,Helvetica,Arial,sans-serif;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:grab;touch-action:none}
+.pin:hover{filter:brightness(1.1)}
+.pin.on{background:#1f2328;transform:scale(1.3);z-index:3}
+.empty{max-width:440px;margin:60px auto;text-align:center;background:#fff;padding:30px;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.08)}
+.empty h3{margin:0 0 8px}
+.side{border-left:1px solid var(--line);background:#fff;padding:12px 16px;overflow:auto}
+.pli{display:flex;gap:10px;align-items:flex-start;padding:8px;border-radius:7px;cursor:pointer}
+.pli:hover{background:#f4f2ee}
+.pli b{flex:none;width:24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center}
+.pli span{display:flex;flex-direction:column}
+.pli small{color:var(--mut)}
+.pnr{width:30px;height:30px;border-radius:50%;background:#1f2328;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px;margin-left:auto}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px}
+.th{position:relative;aspect-ratio:1;border-radius:7px;overflow:hidden;background:#eee}
+.th img{width:100%;height:100%;object-fit:cover;cursor:zoom-in;display:block}
+.th button{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;line-height:20px;padding:0}
+.th.add{display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--mut);border:2px dashed var(--line);background:#fafafa;cursor:pointer;margin:0}
+.th.add:hover{border-color:var(--acc);color:var(--acc)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.chip{display:inline-flex;align-items:center;gap:4px;background:#f1efe9;border-radius:14px;padding:3px 4px 3px 10px;font-size:12px}
+.chip a{cursor:pointer;color:var(--ink)}
+.chip a:hover{text-decoration:underline}
+.chip button{border:0;background:transparent;cursor:pointer;color:var(--mut);font-size:14px}
+.side select{width:100%;padding:7px;border:1px solid var(--line);border-radius:7px;background:#fff}
+
+/* Belege */
+#v-belege{padding:16px 20px;max-width:1300px;margin:0 auto}
+.bbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.bbar select,.bbar input[type=search]{padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:#fff}
+.bbar label{margin:0}
+.sum{font-size:14px}
+.drop{border:2px dashed #cfc9bd;border-radius:10px;padding:14px;text-align:center;color:var(--mut);margin-bottom:12px;background:#faf9f6}
+.drop.over{border-color:var(--acc);background:var(--acc2);color:var(--acc)}
+table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.bt th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);padding:9px 8px;border-bottom:1px solid var(--line);background:#faf9f6}
+.bt td{padding:5px 8px;border-bottom:1px solid #f0ede7;vertical-align:middle}
+.bt tr.hl td{background:var(--acc2)}
+.bt input,.bt select{width:100%;border:1px solid transparent;background:transparent;padding:5px 6px;border-radius:5px}
+.bt input:hover,.bt select:hover,.bt input:focus{border-color:var(--line);background:#fff;outline:none}
+.r{text-align:right}
+.bth{width:48px;height:48px;border-radius:6px;overflow:hidden;background:#eee;position:relative;cursor:pointer}
+.bth img{width:100%;height:100%;object-fit:cover}
+.tag{position:absolute;bottom:2px;left:2px;background:#b91c1c;color:#fff;font-size:9px;font-weight:700;padding:0 4px;border-radius:3px}
+.pb{display:inline-block;background:var(--acc);color:#fff;border-radius:10px;padding:0 7px;font-size:11px;cursor:pointer;margin:1px 0;white-space:nowrap}
+
+/* Export */
+#v-export{padding:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px;max-width:1000px;margin:0 auto;align-items:start}
+.card{background:#fff;border-radius:12px;padding:22px;box-shadow:0 1px 6px rgba(0,0,0,.07)}
+.card h2{margin:0 0 16px;font-size:18px}
+.ck{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);font-weight:400;margin:0 0 8px}
+.ck input{width:auto;margin:0}
+.opts{margin:6px 0 18px}
+
+/* Cloud */
+.sync{display:flex;align-items:center;gap:6px;background:transparent;border:1px solid #444;color:#cfd2d6;border-radius:16px;padding:5px 11px;font-size:12px;cursor:pointer;white-space:nowrap}
+.sync i{width:9px;height:9px;border-radius:50%;background:#888}
+.sync.ok i{background:#22c55e}.sync.busy i{background:#eab308}.sync.pend i{background:#eab308}.sync.off i{background:#9ca3af}.sync.err i{background:#ef4444}
+#login{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:300;padding:16px}
+#login form{width:100%;max-width:380px}
+.err{color:#b91c1c;font-size:13px;min-height:18px}
+/* Lightbox / Toast */
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:100;cursor:zoom-out}
+#lb img{max-width:94vw;max-height:94vh;box-shadow:0 4px 30px rgba(0,0,0,.5)}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f2328;color:#fff;padding:10px 18px;border-radius:8px;z-index:200;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+
+.plan{touch-action:none}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px}
+.tw table.bt{min-width:920px}
+.th.cam{font-size:22px}
+/* Tablet / Touch */
+@media(pointer:coarse){
+  .b{padding:9px 14px;font-size:14px}
+  .b.sm{padding:7px 13px}
+  .pin{width:36px;height:36px;margin:-18px 0 0 -18px;line-height:32px;font-size:14px}
+  .th button{width:30px;height:30px;font-size:16px}
+  .bt input,.bt select{border-color:var(--line);background:#fff;padding:8px 6px}
+  .fl{padding:11px 12px}
+  label input,label textarea,label select{padding:10px;font-size:16px}
+  nav button{padding:10px 14px}
+  .drop{display:none}
+}
+/* Hochformat / schmale Bildschirme */
+@media(max-width:1000px){
+  header{height:auto;min-height:54px;flex-wrap:wrap;gap:8px;padding:8px 12px}
+  header input{min-width:0;flex:1}
+  nav{margin-left:0}
+  #v-plan{grid-template-columns:1fr;height:auto}
+  .floors{display:flex;align-items:center;gap:8px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px 12px}
+  .floors .hd{margin:0}
+  #floorList{display:flex;gap:6px}
+  .fl{white-space:nowrap;margin:0;background:#fff;border:1px solid var(--line);gap:8px}
+  .floors .b{margin:0;width:auto}
+  .stage{flex:none;height:58vh;padding:10px}
+  .side{border-left:0;border-top:1px solid var(--line);padding:14px 16px 40px}
+  .thumbs{grid-template-columns:repeat(4,1fr)}
+  #v-belege{padding:12px}
+  #v-export{padding:14px}
+}
+
+/* Druck / PDF */
+#print{display:none}
+@media print{
+  @page{size:A4;margin:14mm 13mm 16mm}
+  html,body{background:#fff}
+  body>*:not(#print){display:none!important}
+  #print{display:block;font-size:10.5pt;color:#111}
+  #print *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pg,.att,.blist{break-before:page}
+  .cover{padding-top:50mm}
+  .cover h1{font-size:28pt;margin:0 0 4mm}
+  .cover .addr{font-size:15pt;color:#444;margin:0 0 14mm}
+  .cover table{border-collapse:collapse;margin-bottom:12mm}
+  .cover td{padding:2mm 8mm 2mm 0;border-bottom:.3pt solid #ccc}
+  .cover td:first-child{color:#666}
+  #print h2{font-size:16pt;border-bottom:1.5pt solid #c2410c;padding-bottom:2mm;margin:0 0 5mm}
+  .pplan{position:relative;margin:0 auto;border:.3pt solid #999}
+  .pplan img{display:block;width:100%}
+  .pplan .pin{width:20px;height:20px;margin:-10px 0 0 -10px;font-size:9px;line-height:16px;border-width:1.5px;box-shadow:none}
+  .entry{margin-bottom:7mm}
+  .eh{display:flex;align-items:center;gap:3mm;border-bottom:.3pt solid #bbb;padding-bottom:1.5mm;margin-bottom:2mm;break-after:avoid}
+  .enr{flex:none;width:7mm;height:7mm;border-radius:50%;background:#c2410c;color:#fff;font-weight:700;font-size:9pt;display:flex;align-items:center;justify-content:center}
+  .ed{margin-left:auto;color:#666}
+  .entry p{margin:1mm 0 2mm}
+  .eph{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-top:2mm}
+  .eph img{width:100%;max-height:85mm;object-fit:contain;background:#f3f3f3;break-inside:avoid}
+  .blist table{width:100%;border-collapse:collapse;font-size:9.5pt}
+  .blist th{text-align:left;border-bottom:1pt solid #333;padding:1.5mm}
+  .blist td{border-bottom:.3pt solid #ccc;padding:1.5mm;vertical-align:top}
+  .blist tr{break-inside:avoid}
+  .blist .tot td{font-weight:700;border-top:1pt solid #333;border-bottom:0}
+  .blist h3{margin:7mm 0 2mm;font-size:11pt}
+  .att h3{font-size:11pt;margin:0 0 3mm}
+  .att img{display:block;max-width:100%;max-height:245mm;margin:0 auto;object-fit:contain}
+}
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">🏗️</span>
+  <input id="projName" data-pf="name" placeholder="Name der Baustelle" title="Name der Baustelle">
+  <nav>
+    <button data-act="tab" data-id="plan">Grundrisse</button>
+    <button data-act="tab" data-id="belege">Belege</button>
+    <button data-act="tab" data-id="export">Export &amp; Konto</button>
+  </nav>
+  <button id="syncBtn" class="sync" data-act="syncNow" hidden title="Jetzt synchronisieren"><i></i><span></span></button>
+</header>
+
+<main id="v-plan" class="view">
+  <aside class="floors">
+    <div class="hd">Geschosse</div>
+    <div id="floorList"></div>
+    <button class="b" data-act="addFloor">+ Geschoss</button>
+  </aside>
+  <section class="stagewrap">
+    <div class="toolbar" id="planBar"></div>
+    <div class="stage" id="stage"></div>
+  </section>
+  <aside class="side" id="pinPanel"></aside>
+</main>
+<main id="v-belege" class="view" hidden></main>
+<main id="v-export" class="view" hidden></main>
+
+<input type="file" id="planInput" accept="image/*,application/pdf" data-up="plan" hidden>
+<div id="lb" hidden data-act="closeLb"><img alt=""></div>
+<div id="toast" hidden></div>
+<div id="login" hidden><form id="lgForm" class="card"><h2>🏗️ Baustellenprotokoll</h2><p class="mut">Bitte mit deinem Konto anmelden.</p>
+  <label>E-Mail<input type="email" id="lgEmail" autocomplete="username" required></label>
+  <label>Passwort<input type="password" id="lgPw" autocomplete="current-password" required></label>
+  <button class="b p big" type="submit" style="width:100%;justify-content:center">Anmelden</button><p id="lgErr" class="err"></p></form></div>
+<div id="print"></div>
+
+<script>
+'use strict';
+/* ---------- Hilfsfunktionen ---------- */
+const $=s=>document.querySelector(s);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nl2br=s=>esc(s).replace(/\n/g,'<br>');
+const chf=n=>(Number(n)||0).toLocaleString('de-CH',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pad=n=>String(n).padStart(3,'0');
+const clamp=v=>Math.max(0,Math.min(1,v));
+const isoDate=d=>{const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`};
+const today=()=>isoDate(new Date());
+const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
+const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
+const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
+const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
+
+let toastT;
+function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,ms)}
+
+/* ---------- Datenbank (IndexedDB, lokal im Browser) ---------- */
+let DB;
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('baustellenprotokoll',2);
+  r.onupgradeneeded=()=>{const d=r.result;for(const s of ['kv','floors','pins','belege','blobs','queue'])if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'})};
+  r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)})}
+function tx(store,mode,fn){return new Promise((res,rej)=>{const t=DB.transaction(store,mode);const r=fn(t.objectStore(store));let out;if(r)r.onsuccess=()=>{out=r.result};t.oncomplete=()=>res(out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
+const dbAll=s=>tx(s,'readonly',st=>st.getAll());
+const rawPut=(s,v)=>tx(s,'readwrite',st=>st.put(v)).catch(e=>{alert('Speichern fehlgeschlagen: '+(e&&e.message||e));throw e});
+const rawDel=(s,id)=>tx(s,'readwrite',st=>st.delete(id));
+/* Jede Änderung wird lokal gespeichert UND für die Cloud vorgemerkt */
+const SYNC_KIND={floors:'floor',pins:'pin',belege:'beleg',kv:'project',blobs:'blob'};
+const STORE_OF={floor:'floors',pin:'pins',beleg:'belege',project:'kv',blob:'blobs'};
+async function enqueue(store,id,op){if(!cloudOn())return;await tx('queue','readwrite',st=>st.put({id:store+'|'+id,store,recId:id,op,t:Date.now()+Math.random()}));scheduleSync()}
+async function dbPut(s,v){await rawPut(s,v);if(SYNC_KIND[s]&&!(s==='kv'&&v.id!=='project'))await enqueue(s,v.id,'put')}
+async function dbDel(s,id){await rawDel(s,id);if(SYNC_KIND[s])await enqueue(s,id,'del')}
+const dbClear=s=>tx(s,'readwrite',st=>st.clear());
+
+/* ---------- Zustand ---------- */
+const S={project:{id:'project',name:'Baustellenprotokoll',address:'',author:'',period:''},floors:[],pins:[],belege:[],blobs:[]};
+const UI={tab:'plan',floor:null,pin:null,add:false,zoom:1,fy:'',fc:'',q:'',hl:null,opts:{plans:true,entries:true,list:true,att:true}};
+const blobMap=new Map(), urls=new Map();
+const floorById=id=>S.floors.find(f=>f.id===id);
+const pinById=id=>S.pins.find(p=>p.id===id);
+const belegById=id=>S.belege.find(b=>b.id===id);
+const curFloor=()=>floorById(UI.floor);
+const floorsSorted=()=>[...S.floors].sort((a,b)=>a.order-b.order);
+const pinsOf=fid=>S.pins.filter(p=>p.floorId===fid).sort((a,b)=>a.nr-b.nr);
+const belegeSorted=()=>[...S.belege].sort((a,b)=>(a.date||'').localeCompare(b.date||'')||a.nr-b.nr);
+const belegLabel=b=>`B-${pad(b.nr)} ${b.supplier||b.desc||''}${b.amount!==''&&b.amount!=null?' · CHF '+chf(b.amount):''}`;
+const isPdfBeleg=b=>(blobMap.get(b.fileId)||{}).mime==='application/pdf';
+
+const PH='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150"><rect width="200" height="150" fill="#e7e3db"/><text x="100" y="80" font-family="sans-serif" font-size="13" fill="#888" text-anchor="middle">wird geladen …</text></svg>');
+function urlOf(id){if(!id)return '';if(urls.has(id))return urls.get(id);const b=blobMap.get(id);if(!b)return '';if(!b.blob)return PH;const u=URL.createObjectURL(b.blob);urls.set(id,u);return u}
+async function storeBlob(blob,mime,name,hash,extra){const rec=Object.assign({id:uid(),blob,mime:mime||blob.type,name:name||'',hash:hash||''},extra||{});await dbPut('blobs',rec);S.blobs.push(rec);blobMap.set(rec.id,rec);return rec}
+async function delBlobIfUnused(id){if(!id)return;
+  const used=S.pins.some(p=>p.photoIds.includes(id))||S.belege.some(b=>b.fileId===id||b.previewId===id)||S.floors.some(f=>f.planId===id);
+  if(used)return;await dbDel('blobs',id);const i=S.blobs.findIndex(b=>b.id===id);if(i>=0)S.blobs.splice(i,1);blobMap.delete(id);
+  if(urls.has(id)){URL.revokeObjectURL(urls.get(id));urls.delete(id)}}
+function whereUsed(id){const p=S.pins.find(p=>p.photoIds.includes(id));if(p)return `${floorById(p.floorId)?.name||''}, Pin ${p.nr}`;
+  const b=S.belege.find(b=>b.fileId===id);if(b)return `Beleg B-${pad(b.nr)}`;return ''}
+
+/* ---------- Bilder, PDFs, Hash ---------- */
+async function hashBlob(b){const buf=await b.arrayBuffer();
+  try{if(window.crypto&&crypto.subtle){const h=await crypto.subtle.digest('SHA-256',buf);return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('')}}catch(e){}
+  const a=new Uint8Array(buf);let h1=2166136261>>>0,h2=0;for(let i=0;i<a.length;i++){h1=Math.imul(h1^a[i],16777619)>>>0;h2=(Math.imul(h2,31)+a[i])>>>0}return 'f'+h1.toString(16)+h2.toString(16)+a.length}
+async function loadBitmap(blob){
+  if('createImageBitmap' in window){try{return await createImageBitmap(blob,{imageOrientation:'from-image'})}catch(e){}}
+  return await new Promise((res,rej)=>{const i=new Image();const u=URL.createObjectURL(blob);i.onload=()=>{res(i)};i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('Bild kann nicht gelesen werden'))};i.src=u})}
+async function compressImage(blob,max,q){const im=await loadBitmap(blob);const w=im.width,h=im.height;if(!w||!h)throw new Error('leeres Bild');
+  const s=Math.min(1,max/Math.max(w,h));const c=document.createElement('canvas');c.width=Math.round(w*s);c.height=Math.round(h*s);
+  const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);
+  const out=await new Promise(r=>c.toBlob(r,'image/jpeg',q));if(!out)throw new Error('Komprimierung fehlgeschlagen');return out}
+let pdfjsP=null;
+function loadPdfLib(base){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=base+'pdf.min.js';
+  s.onload=()=>{if(!window.pdfjsLib)return rej(new Error('pdf.js fehlt'));window.pdfjsLib.GlobalWorkerOptions.workerSrc=base+'pdf.worker.min.js';res(window.pdfjsLib)};
+  s.onerror=()=>{s.remove();rej(new Error('nicht gefunden'))};document.head.appendChild(s)})}
+function pdfjs(){if(!pdfjsP)pdfjsP=loadPdfLib('./').catch(()=>loadPdfLib('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/'))
+  .catch(()=>{pdfjsP=null;throw new Error('PDF-Funktion nicht verfügbar – bitte einmal mit Internetverbindung öffnen.')});return pdfjsP}
+async function openPdf(blob){const lib=await pdfjs();return await lib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise}
+async function renderPdfPage(doc,n,maxPx){const p=await doc.getPage(n);const v0=p.getViewport({scale:1});const v=p.getViewport({scale:maxPx/Math.max(v0.width,v0.height)});
+  const c=document.createElement('canvas');c.width=Math.round(v.width);c.height=Math.round(v.height);const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);
+  await p.render({canvasContext:g,viewport:v}).promise;return await new Promise(r=>c.toBlob(r,'image/jpeg',.88))}
+
+/* ---------- Rendering ---------- */
+function render(){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id===UI.tab));
+  document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!=='v-'+UI.tab);
+  $('#projName').value=S.project.name||'';
+  if(UI.tab==='plan')renderPlan();else if(UI.tab==='belege')renderBelege();else renderExport();
+}
+function renderPlan(){renderFloorList();renderStage();renderPinPanel()}
+function renderFloorList(){
+  const fl=floorsSorted();
+  $('#floorList').innerHTML=fl.map(f=>`<div class="fl ${f.id===UI.floor?'on':''}" data-act="selFloor" data-id="${f.id}"><span>${esc(f.name)}</span><small>${S.pins.filter(p=>p.floorId===f.id).length}</small></div>`).join('')||'<p class="mut">Noch keine Geschosse.</p>';
+}
+function renderStage(){
+  const f=curFloor(),bar=$('#planBar'),st=$('#stage');
+  if(!f){bar.innerHTML='<span class="mut">Kein Geschoss ausgewählt</span>';st.innerHTML=`<div class="empty"><h3>Willkommen</h3><p>Lege zuerst ein Geschoss an (z.B. UG, EG, 1. OG, DG) und lade den Grundriss als Bild oder PDF hoch. Danach setzt du Pins direkt in den Plan.</p><button class="b p" data-act="addFloor">+ Geschoss anlegen</button></div>`;return}
+  bar.innerHTML=`<input class="fname" value="${esc(f.name)}" data-ch="renameFloor" title="Geschoss umbenennen">
+    <button class="b sm" data-act="up" title="Nach oben">▲</button><button class="b sm" data-act="down" title="Nach unten">▼</button><span class="sp"></span>
+    ${f.planId?`<button class="b sm" data-act="zout" title="Verkleinern">−</button><span class="zv">${Math.round(UI.zoom*100)}%</span><button class="b sm" data-act="zin" title="Vergrössern">+</button>
+    <button class="b ${UI.add?'p':''}" data-act="addPin">${UI.add?'Jetzt in den Plan klicken … (Esc)':'📍 Pin setzen'}</button>`:''}
+    <button class="b" data-act="planUp">${f.planId?'Grundriss ersetzen':'Grundriss hochladen'}</button>
+    <button class="b d" data-act="delFloor">Geschoss löschen</button>`;
+  if(!f.planId){st.innerHTML=`<div class="empty"><p>Für «${esc(f.name)}» ist noch kein Grundriss hinterlegt.</p><button class="b p" data-act="planUp">Grundriss hochladen (Bild oder PDF)</button></div>`;return}
+  st.innerHTML=`<div class="plan ${UI.add?'adding':''}" style="width:${UI.zoom*100}%"><img src="${urlOf(f.planId)}" alt="Grundriss" draggable="false">${pinsOf(f.id).map(p=>`<div class="pin ${p.id===UI.pin?'on':''}" data-pin="${p.id}" style="left:${p.x*100}%;top:${p.y*100}%" title="${esc(p.title)}">${p.nr}</div>`).join('')}</div>`;
+}
+function renderPinPanel(){
+  const el=$('#pinPanel'),p=pinById(UI.pin);
+  if(!curFloor()){el.innerHTML='';return}
+  if(!p||p.floorId!==UI.floor){
+    const pins=pinsOf(UI.floor);
+    el.innerHTML=`<div class="hd">Einträge ${esc(curFloor().name)}</div>${pins.length?pins.map(x=>`<div class="pli" data-act="selPin" data-id="${x.id}"><b>${x.nr}</b><span>${esc(x.title||'(ohne Titel)')}<small>${fmtDate(x.date)} · ${x.photoIds.length} Foto(s)${x.belegIds.length?' · '+x.belegIds.length+' Beleg(e)':''}</small></span></div>`).join(''):'<p class="mut">Noch keine Pins. Klicke oben auf «📍 Pin setzen» und dann auf die Stelle im Grundriss.</p>'}`;
+    return}
+  const linked=p.belegIds.map(belegById).filter(Boolean);
+  const avail=belegeSorted().filter(b=>!p.belegIds.includes(b.id));
+  el.innerHTML=`<div class="hd"><button class="b sm" data-act="closePin">‹ Alle Einträge</button><span class="pnr">${p.nr}</span></div>
+  <label>Titel / Raum<input data-f="title" value="${esc(p.title)}" placeholder="z.B. Bad OG – Wandanschluss"></label>
+  <label>Datum<input type="date" data-f="date" value="${esc(p.date)}"></label>
+  <label>Bemerkungen<textarea data-f="note" rows="5" placeholder="Was wurde gemacht, Besonderheiten …">${esc(p.note)}</textarea></label>
+  <div class="lbl">Fotos</div>
+  <div class="thumbs">${p.photoIds.map(id=>`<div class="th"><img src="${urlOf(id)}" alt="" data-act="zoomImg" data-id="${id}"><button data-act="rmPhoto" data-id="${id}" title="Foto entfernen">×</button></div>`).join('')}<label class="th add cam" title="Foto aufnehmen">📷<input type="file" accept="image/*" capture="environment" hidden data-up="pinPhotos"></label><label class="th add" title="Fotos aus der Galerie">＋<input type="file" accept="image/*" multiple hidden data-up="pinPhotos"></label></div>
+  <label>Materialbezug (optional)<textarea data-f="material" rows="2" placeholder="z.B. 12 m² Gipsfaserplatten 15 mm">${esc(p.material)}</textarea></label>
+  <div class="lbl">Verknüpfte Belege</div>
+  <div class="chips">${linked.map(b=>`<span class="chip"><a data-act="gotoBeleg" data-id="${b.id}">${esc(belegLabel(b))}</a><button data-act="unlink" data-id="${b.id}" title="Verknüpfung lösen">×</button></span>`).join('')||'<span class="mut">keine</span>'}</div>
+  ${avail.length?`<select data-ch="link"><option value="">+ Beleg verknüpfen …</option>${avail.map(b=>`<option value="${b.id}">${esc(belegLabel(b))}</option>`).join('')}</select>`:'<p class="mut" style="font-size:12px">Belege erfasst du im Reiter «Belege».</p>'}
+  ${p.by?`<p class="mut" style="font-size:12px;margin-top:18px">Erfasst von ${esc(p.by)}</p>`:''}<div style="margin-top:14px"><button class="b d" data-act="delPin">Pin löschen</button></div>`;
+}
+function filteredBelege(){const q=UI.q.trim().toLowerCase();
+  return belegeSorted().filter(b=>(!UI.fy||(b.date||'').startsWith(UI.fy))&&(!UI.fc||b.category===UI.fc)&&(!q||[b.supplier,b.desc,b.category,'b-'+pad(b.nr),String(b.amount)].join(' ').toLowerCase().includes(q)))}
+function renderBelege(){
+  const years=[...new Set(S.belege.map(b=>(b.date||'').slice(0,4)).filter(Boolean))].sort();
+  const list=filteredBelege();const sum=list.reduce((s,b)=>s+(+b.amount||0),0);
+  const fn=id=>floorById(id)?.name||'';
+  $('#v-belege').innerHTML=`<div class="bbar"><label class="b p">📷 Beleg fotografieren<input type="file" accept="image/*" capture="environment" hidden data-up="belege"></label><label class="b">+ Fotos / PDFs<input type="file" accept="image/*,application/pdf" multiple hidden data-up="belege"></label>
+    <select data-ch="fy"><option value="">Alle Jahre</option>${years.map(y=>`<option ${UI.fy===y?'selected':''}>${y}</option>`).join('')}</select>
+    <select data-ch="fc"><option value="">Alle Kategorien</option>${CATS.map(c=>`<option ${UI.fc===c?'selected':''}>${c}</option>`).join('')}</select>
+    <input type="search" placeholder="Suchen … (Enter)" value="${esc(UI.q)}" data-ch="q">
+    <span class="sp"></span><span class="sum">${list.length} Beleg(e) · Total CHF <b>${chf(sum)}</b></span></div>
+    <div class="drop" id="drop">Fotos oder PDFs von Belegen hierher ziehen – oder oben «+ Fotos / PDFs»</div>
+    ${list.length?`<div class="tw"><table class="bt"><thead><tr><th></th><th>Nr.</th><th style="width:140px">Datum</th><th>Lieferant / Firma</th><th>Beschreibung</th><th style="width:150px">Kategorie</th><th class="r" style="width:120px">Betrag CHF</th><th>Pins</th><th></th></tr></thead><tbody>
+    ${list.map(b=>{const pins=S.pins.filter(p=>p.belegIds.includes(b.id));
+      return `<tr data-id="${b.id}" class="${UI.hl===b.id?'hl':''}"><td><div class="bth" data-act="openBeleg" data-id="${b.id}" title="Beleg öffnen">${b.previewId?`<img src="${urlOf(b.previewId)}" alt="">`:''}${isPdfBeleg(b)?'<span class="tag">PDF</span>':''}</div></td>
+      <td class="mut" style="white-space:nowrap">B-${pad(b.nr)}</td><td><input type="date" data-bf="date" value="${esc(b.date)}"></td>
+      <td><input data-bf="supplier" value="${esc(b.supplier)}" placeholder="Lieferant"></td><td><input data-bf="desc" value="${esc(b.desc)}"></td>
+      <td><select data-bf="category">${CATS.map(c=>`<option ${b.category===c?'selected':''}>${c}</option>`).join('')}</select></td>
+      <td><input class="r" data-bf="amount" inputmode="decimal" value="${b.amount===''||b.amount==null?'':chf(b.amount)}" placeholder="0.00"></td>
+      <td>${pins.map(p=>`<a class="pb" data-act="gotoPin" data-id="${p.id}" title="${esc(p.title)}">${esc(fn(p.floorId))} ${p.nr}</a>`).join(' ')}</td>
+      <td><button class="b d sm" data-act="delBeleg" data-id="${b.id}" title="Beleg löschen">×</button></td></tr>`}).join('')}</tbody></table></div>`
+    :`<p class="mut c">${S.belege.length?'Keine Belege für diesen Filter.':'Noch keine Belege erfasst.'}</p>`}`;
+  const d=$('#drop');
+  d.ondragover=e=>{e.preventDefault();d.classList.add('over')};d.ondragleave=()=>d.classList.remove('over');
+  d.ondrop=e=>{e.preventDefault();d.classList.remove('over');addBelege([...e.dataTransfer.files])};
+  if(UI.hl){const r=document.querySelector(`#v-belege tr[data-id="${UI.hl}"]`);if(r)r.scrollIntoView({block:'center'});UI.hl=null}
+}
+function renderExport(){
+  const P=S.project,o=UI.opts;
+  $('#v-export').innerHTML=`<div class="card"><h2>Protokoll als PDF</h2>
+   <label>Titel<input data-pf="name" value="${esc(P.name)}"></label>
+   <label>Baustelle / Adresse<input data-pf="address" value="${esc(P.address)}"></label>
+   <label>Verfasser / Bauherr<input data-pf="author" value="${esc(P.author)}"></label>
+   <label>Zeitraum<input data-pf="period" value="${esc(P.period)}" placeholder="z.B. 2021 – 2025"></label>
+   <div class="opts">
+    <label class="ck"><input type="checkbox" data-opt="plans" ${o.plans?'checked':''}> Grundrisse mit Pins</label>
+    <label class="ck"><input type="checkbox" data-opt="entries" ${o.entries?'checked':''}> Einträge mit Bemerkungen und Fotos</label>
+    <label class="ck"><input type="checkbox" data-opt="list" ${o.list?'checked':''}> Belegliste mit Totalen pro Kategorie</label>
+    <label class="ck"><input type="checkbox" data-opt="att" ${o.att?'checked':''}> Belege als Anhang (eine Seite pro Beleg)</label></div>
+   <button class="b p big" data-act="print">📄 PDF erstellen</button>
+   <p class="mut">Im Druckfenster als Ziel «Als PDF sichern» wählen und bei «Weitere Einstellungen» die <b>Hintergrundgrafiken</b> einschalten, damit die Pins farbig erscheinen.</p></div>
+   ${cloudOn()?`<div class="card"><h2>Cloud &amp; Konto</h2>
+   <p>${SES?`Angemeldet als <b>${esc(SES.email)}</b>`:'Nicht angemeldet'}</p>
+   <p class="mut" id="cloudInfo">${esc(syncText())}</p>
+   <p><button class="b p" data-act="syncNow">Jetzt synchronisieren</button> <button class="b" data-act="logout">Abmelden</button></p>
+   <p class="mut" style="font-size:12px">Alle Änderungen werden zuerst auf diesem Gerät gespeichert und automatisch hochgeladen, sobald eine Internetverbindung besteht. Neue Benutzer legst du im Supabase-Dashboard an.</p></div>`:''}
+   <div class="card"><h2>Datensicherung</h2>
+   <p>${cloudOn()?'Die Daten liegen in der Cloud und auf jedem angemeldeten Gerät. Eine zusätzliche Sicherungsdatei ab und zu schadet trotzdem nicht.':'Alle Angaben, Fotos und Belege sind in <b>diesem Browser</b> gespeichert. Speichere regelmässig eine Sicherung.'}</p>
+   <p><button class="b p" data-act="backup">Sicherung speichern (.json)</button> <label class="b" style="display:inline-flex;margin:0">Sicherung laden …<input type="file" accept=".json,application/json" hidden data-up="restore"></label></p>
+   <p class="mut" id="storeInfo">${S.floors.length} Geschosse · ${S.pins.length} Pins · ${S.belege.length} Belege · ${S.blobs.length} Dateien</p></div>`;
+  if(navigator.storage&&navigator.storage.estimate)navigator.storage.estimate().then(e=>{const el=$('#storeInfo');if(el)el.textContent+=` · ${(e.usage/1048576).toFixed(1)} MB belegt`}).catch(()=>{});
+}
+function showImg(id){const lb=$('#lb');lb.querySelector('img').src=urlOf(id);lb.hidden=false}
+
+/* ---------- Aktionen ---------- */
+async function addPinAt(x,y){const f=curFloor();const nr=Math.max(0,...pinsOf(f.id).map(p=>p.nr))+1;
+  const p={id:uid(),floorId:f.id,x,y,nr,title:'',date:today(),note:'',material:'',photoIds:[],belegIds:[],by:SES?SES.email:''};
+  S.pins.push(p);await dbPut('pins',p);UI.pin=p.id;UI.add=false;renderPlan();const t=document.querySelector('[data-f="title"]');if(t)t.focus()}
+async function uploadPlan(file){const f=curFloor();if(!f||!file)return;toast('Grundriss wird verarbeitet …',60000);
+  try{let blob;
+    if(isPdfFile(file)){const doc=await openPdf(file);let n=1;
+      if(doc.numPages>1){const a=prompt(`Das PDF hat ${doc.numPages} Seiten. Welche Seite ist der Grundriss «${f.name}»?`,'1');if(a===null){toast('Abgebrochen');return}n=Math.min(doc.numPages,Math.max(1,parseInt(a,10)||1))}
+      blob=await renderPdfPage(doc,n,3600)}
+    else blob=await compressImage(file,3600,.9);
+    const im=await loadBitmap(blob);const rec=await storeBlob(blob,'image/jpeg',file.name,'',{w:im.width,h:im.height});
+    const old=f.planId;f.planId=rec.id;await dbPut('floors',f);await delBlobIfUnused(old);UI.zoom=1;renderPlan();toast('Grundriss gespeichert')}
+  catch(e){console.error(e);toast('Fehler: '+e.message,6000)}}
+async function checkDup(file,hash){const dup=S.blobs.find(x=>x.hash&&x.hash===hash);if(!dup)return true;const w=whereUsed(dup.id);
+  return confirm(`«${file.name}» ist bereits vorhanden${w?' ('+w+')':''}.\nTrotzdem nochmals hinzufügen?`)}
+async function addPinPhotos(files){const p=pinById(UI.pin);if(!p)return;let n=0;
+  for(const f of files){toast(`Foto ${++n} von ${files.length} …`,60000);const hash=await hashBlob(f);if(!(await checkDup(f,hash)))continue;
+    let bl;try{bl=await compressImage(f,1800,.8)}catch(e){toast('Dieses Bildformat kann der Browser nicht lesen: '+f.name,6000);continue}
+    const r=await storeBlob(bl,'image/jpeg',f.name,hash);p.photoIds.push(r.id);await dbPut('pins',p)}
+  toast('Fotos gespeichert');renderPlan()}
+async function addBelege(files){let n=0;
+  for(const f of files){if(!(f.type.startsWith('image/')||isPdfFile(f)))continue;toast(`Beleg ${++n} von ${files.length} …`,60000);
+    const hash=await hashBlob(f);if(!(await checkDup(f,hash)))continue;
+    let fileRec,prev=null;
+    if(isPdfFile(f)){fileRec=await storeBlob(f,'application/pdf',f.name,hash);try{const doc=await openPdf(f);const img=await renderPdfPage(doc,1,1600);prev=await storeBlob(img,'image/jpeg','vorschau.jpg','',{pages:doc.numPages})}catch(e){console.warn(e)}}
+    else{let bl;try{bl=await compressImage(f,2200,.82)}catch(e){toast('Dieses Bildformat kann der Browser nicht lesen: '+f.name,6000);continue}fileRec=await storeBlob(bl,'image/jpeg',f.name,hash);prev=fileRec}
+    const b={id:uid(),nr:Math.max(0,...S.belege.map(x=>x.nr))+1,date:isoDate(new Date(f.lastModified||Date.now())),supplier:'',desc:f.name.replace(/\.[^.]+$/,''),category:'Material',amount:'',by:SES?SES.email:'',fileId:fileRec.id,previewId:prev?prev.id:null};
+    S.belege.push(b);await dbPut('belege',b)}
+  toast(n?'Belege gespeichert – bitte Datum, Lieferant und Betrag ergänzen':'Keine Bilder oder PDFs gefunden',4000);render()}
+async function moveFloor(dir){const fl=floorsSorted();const i=fl.findIndex(f=>f.id===UI.floor);const j=i+dir;if(i<0||j<0||j>=fl.length)return;
+  const a=fl[i],b=fl[j];[a.order,b.order]=[b.order,a.order];await dbPut('floors',a);await dbPut('floors',b);renderPlan()}
+
+const ACT={
+  tab:id=>{UI.tab=id;UI.add=false;render()},
+  addFloor:async()=>{const name=prompt('Name des Geschosses (z.B. UG, EG, 1. OG, DG):');if(!name||!name.trim())return;
+    const f={id:uid(),name:name.trim(),order:Math.max(0,...S.floors.map(x=>x.order))+1,planId:null};S.floors.push(f);await dbPut('floors',f);UI.floor=f.id;UI.pin=null;UI.add=false;renderPlan()},
+  selFloor:id=>{UI.floor=id;UI.pin=null;UI.add=false;UI.zoom=1;renderPlan()},
+  up:()=>moveFloor(-1),down:()=>moveFloor(1),
+  zin:()=>applyZoom(UI.zoom*1.25),
+  zout:()=>applyZoom(UI.zoom/1.25),
+  addPin:()=>{UI.add=!UI.add;renderStage()},
+  planUp:()=>$('#planInput').click(),
+  delFloor:async()=>{const f=curFloor();const n=pinsOf(f.id).length;if(!confirm(`Geschoss «${f.name}» mit ${n} Pin(s) und allen zugehörigen Fotos löschen?`))return;
+    const pins=pinsOf(f.id);S.pins=S.pins.filter(p=>p.floorId!==f.id);S.floors=S.floors.filter(x=>x.id!==f.id);
+    for(const p of pins)await dbDel('pins',p.id);await dbDel('floors',f.id);
+    for(const p of pins)for(const id of p.photoIds)await delBlobIfUnused(id);await delBlobIfUnused(f.planId);
+    UI.floor=floorsSorted()[0]?.id||null;UI.pin=null;renderPlan()},
+  selPin:id=>{UI.pin=id;renderPlan()},
+  closePin:()=>{UI.pin=null;renderPlan()},
+  zoomImg:id=>showImg(id),
+  closeLb:()=>{$('#lb').hidden=true},
+  rmPhoto:async id=>{const p=pinById(UI.pin);if(!confirm('Foto aus diesem Eintrag entfernen?'))return;p.photoIds=p.photoIds.filter(x=>x!==id);await dbPut('pins',p);await delBlobIfUnused(id);renderPinPanel()},
+  unlink:async id=>{const p=pinById(UI.pin);p.belegIds=p.belegIds.filter(x=>x!==id);await dbPut('pins',p);renderPlan()},
+  delPin:async()=>{const p=pinById(UI.pin);if(!confirm(`Pin ${p.nr} mit ${p.photoIds.length} Foto(s) löschen?`))return;
+    S.pins=S.pins.filter(x=>x.id!==p.id);await dbDel('pins',p.id);for(const id of p.photoIds)await delBlobIfUnused(id);UI.pin=null;renderPlan()},
+  gotoBeleg:id=>{UI.tab='belege';UI.fy=UI.fc=UI.q='';UI.hl=id;render()},
+  gotoPin:id=>{const p=pinById(id);if(!p)return;UI.tab='plan';UI.floor=p.floorId;UI.pin=id;UI.zoom=1;render()},
+  openBeleg:id=>{const b=belegById(id);if(!b)return;if(isPdfBeleg(b)){const w=window.open(urlOf(b.fileId),'_blank');if(!w&&b.previewId)showImg(b.previewId)}else showImg(b.fileId)},
+  delBeleg:async id=>{const b=belegById(id);if(!confirm(`Beleg B-${pad(b.nr)} löschen?`))return;
+    S.belege=S.belege.filter(x=>x.id!==id);await dbDel('belege',id);
+    for(const p of S.pins.filter(p=>p.belegIds.includes(id))){p.belegIds=p.belegIds.filter(x=>x!==id);await dbPut('pins',p)}
+    await delBlobIfUnused(b.fileId);await delBlobIfUnused(b.previewId);renderBelege()},
+  print:()=>doPrint(),
+  syncNow:()=>syncNow(true),
+  logout:()=>logout(),
+  backup:()=>doBackup(),
+};
+const CH={
+  renameFloor:async v=>{const f=curFloor();if(!v.trim())return renderStage();f.name=v.trim();await dbPut('floors',f);renderFloorList()},
+  link:async v=>{if(!v)return;const p=pinById(UI.pin);p.belegIds.push(v);await dbPut('pins',p);renderPlan()},
+  fy:v=>{UI.fy=v;renderBelege()},fc:v=>{UI.fc=v;renderBelege()},q:v=>{UI.q=v;renderBelege()},
+};
+const UP={plan:fs=>uploadPlan(fs[0]),pinPhotos:addPinPhotos,belege:addBelege,restore:fs=>doRestore(fs[0])};
+
+document.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(!a||!ACT[a.dataset.act])return;
+  if(a.tagName==='A'||a.tagName==='BUTTON')e.preventDefault();ACT[a.dataset.act](a.dataset.id,a,e)});
+document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
+  if(d.up){const files=[...t.files];t.value='';if(files.length)await UP[d.up](files);return}
+  if(d.ch&&CH[d.ch]){CH[d.ch](t.value,t);return}
+  if(d.opt){UI.opts[d.opt]=t.checked;return}
+  if(d.pf){S.project[d.pf]=t.value;await dbPut('kv',S.project);if(d.pf==='name')document.querySelectorAll('[data-pf="name"]').forEach(i=>{if(i!==t)i.value=t.value});return}
+  if(d.bf){const b=belegById(t.closest('tr').dataset.id);if(!b)return;
+    if(d.bf==='amount'){b.amount=parseAmount(t.value);t.value=b.amount===''?'':chf(b.amount)}else b[d.bf]=t.value;
+    await dbPut('belege',b);const list=filteredBelege();const s=document.querySelector('.sum');if(s)s.innerHTML=`${list.length} Beleg(e) · Total CHF <b>${chf(list.reduce((x,y)=>x+(+y.amount||0),0))}</b>`}});
+const saveTimers={};
+document.addEventListener('input',e=>{const t=e.target;if(!t.dataset.f)return;const p=pinById(UI.pin);if(!p)return;p[t.dataset.f]=t.value;
+  clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);
+  if(t.dataset.f==='title'){const el=document.querySelector(`.pin[data-pin="${p.id}"]`);if(el)el.title=t.value}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#lb').hidden)$('#lb').hidden=true;else if(UI.add){UI.add=false;renderStage()}}});
+window.addEventListener('beforeunload',()=>{for(const id in saveTimers){clearTimeout(saveTimers[id]);const p=pinById(id);if(p)dbPut('pins',p)}});
+
+/* Pins setzen und verschieben */
+$('#stage').addEventListener('pointerdown',e=>{
+  const plan=e.target.closest('.plan');if(!plan||e.button>0)return;
+  const pinEl=e.target.closest('.pin');
+  if(pinEl){e.preventDefault();const p=pinById(pinEl.dataset.pin);if(!p)return;const r=plan.getBoundingClientRect();const sx=e.clientX,sy=e.clientY;let moved=false;
+    try{pinEl.setPointerCapture(e.pointerId)}catch(_){}
+    const mv=ev=>{if(!moved&&Math.hypot(ev.clientX-sx,ev.clientY-sy)<4)return;moved=true;pinEl.style.cursor='grabbing';
+      p.x=clamp((ev.clientX-r.left)/r.width);p.y=clamp((ev.clientY-r.top)/r.height);pinEl.style.left=p.x*100+'%';pinEl.style.top=p.y*100+'%'};
+    const up=async()=>{pinEl.removeEventListener('pointermove',mv);pinEl.removeEventListener('pointerup',up);pinEl.removeEventListener('pointercancel',up);
+      if(moved)await dbPut('pins',p);UI.pin=p.id;renderStage();renderPinPanel()};
+    pinEl.addEventListener('pointermove',mv);pinEl.addEventListener('pointerup',up);pinEl.addEventListener('pointercancel',up);return}
+  /* Plan: 1 Finger = verschieben bzw. Pin setzen (Tippen), 2 Finger = zoomen */
+  e.preventDefault();ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  try{plan.setPointerCapture(e.pointerId)}catch(_){}
+  if(ptrs.size===2){tap=null;const [a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,z:UI.zoom}}
+  else if(ptrs.size===1){tap={id:e.pointerId,x:e.clientX,y:e.clientY};pinch=null}
+});
+const ptrs=new Map();let tap=null,pinch=null;
+function applyZoom(z,cx,cy){
+  const st=$('#stage'),plan=st.querySelector('.plan');z=Math.max(.4,Math.min(6,z));
+  if(!plan){UI.zoom=z;return}
+  const r=plan.getBoundingClientRect();
+  if(cx==null){const sr=st.getBoundingClientRect();cx=sr.left+sr.width/2;cy=sr.top+sr.height/2}
+  const fx=(cx-r.left)/r.width,fy=(cy-r.top)/r.height;
+  UI.zoom=z;plan.style.width=z*100+'%';
+  const r2=plan.getBoundingClientRect();st.scrollLeft+=(r2.left+fx*r2.width)-cx;st.scrollTop+=(r2.top+fy*r2.height)-cy;
+  const zv=document.querySelector('.zv');if(zv)zv.textContent=Math.round(z*100)+'%'}
+$('#stage').addEventListener('pointermove',e=>{
+  const last=ptrs.get(e.pointerId);if(!last)return;
+  const st=$('#stage');const dx=e.clientX-last.x,dy=e.clientY-last.y;ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&ptrs.size>=2){const [a,b]=[...ptrs.values()];const d=Math.hypot(a.x-b.x,a.y-b.y);applyZoom(pinch.z*d/pinch.d,(a.x+b.x)/2,(a.y+b.y)/2);return}
+  if(tap&&Math.hypot(e.clientX-tap.x,e.clientY-tap.y)>8)tap=null;
+  if(!tap&&ptrs.size===1){st.scrollLeft-=dx;st.scrollTop-=dy}
+});
+function ptrEnd(e){if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
+  if(e.type==='pointerup'&&tap&&tap.id===e.pointerId&&UI.add){const plan=$('#stage .plan');if(plan){const r=plan.getBoundingClientRect();addPinAt(clamp((e.clientX-r.left)/r.width),clamp((e.clientY-r.top)/r.height))}}
+  if(ptrs.size===0)tap=null}
+$('#stage').addEventListener('pointerup',ptrEnd);$('#stage').addEventListener('pointercancel',ptrEnd);
+$('#stage').addEventListener('wheel',e=>{if(!e.ctrlKey||!$('#stage .plan'))return;e.preventDefault();applyZoom(UI.zoom*Math.exp(-e.deltaY/150),e.clientX,e.clientY)},{passive:false});
+
+/* ---------- PDF-Export ---------- */
+async function doPrint(){
+  const missing=S.blobs.filter(b=>!b.blob).length;if(missing&&!confirm(`${missing} Foto(s)/Beleg(e) sind noch nicht auf dieses Gerät geladen und würden im PDF fehlen. Trotzdem fortfahren?`))return;
+  const o=UI.opts,P=S.project,fl=floorsSorted();toast('PDF wird vorbereitet …',60000);
+  let h=`<section class="cover"><h1>${esc(P.name||'Baustellenprotokoll')}</h1>${P.address?`<p class="addr">${esc(P.address)}</p>`:''}<table>
+   ${P.period?`<tr><td>Zeitraum</td><td>${esc(P.period)}</td></tr>`:''}${P.author?`<tr><td>Verfasser</td><td>${esc(P.author)}</td></tr>`:''}
+   <tr><td>Erstellt am</td><td>${fmtDate(today())}</td></tr>
+   <tr><td>Umfang</td><td>${fl.length} Geschoss(e) · ${S.pins.length} Einträge · ${S.pins.reduce((s,p)=>s+p.photoIds.length,0)} Fotos · ${S.belege.length} Belege</td></tr>
+   ${S.belege.length?`<tr><td>Total Belege</td><td>CHF ${chf(S.belege.reduce((s,b)=>s+(+b.amount||0),0))}</td></tr>`:''}</table>
+   <h3>Inhalt</h3><ol>${fl.map(f=>`<li>${esc(f.name)} (${pinsOf(f.id).length} Einträge)</li>`).join('')}${o.list&&S.belege.length?'<li>Belegliste</li>':''}${o.att&&S.belege.length?'<li>Anhang: Belege</li>':''}</ol></section>`;
+  for(const f of fl){const pins=pinsOf(f.id);
+    if(o.plans&&f.planId){const b=blobMap.get(f.planId)||{};const w=b.w||1,hh=b.h||1;const wmm=Math.min(184,240*w/hh);
+      h+=`<section class="pg"><h2>${esc(f.name)} – Grundriss</h2><div class="pplan" style="width:${wmm.toFixed(1)}mm"><img src="${urlOf(f.planId)}" alt="">${pins.map(p=>`<span class="pin" style="left:${p.x*100}%;top:${p.y*100}%">${p.nr}</span>`).join('')}</div></section>`}
+    if(o.entries&&pins.length){h+=`<section class="pg"><h2>${esc(f.name)} – Einträge</h2>${pins.map(p=>{const bl=p.belegIds.map(belegById).filter(Boolean);
+      return `<div class="entry"><div class="eh"><span class="enr">${p.nr}</span><b>${esc(p.title||'Ohne Titel')}</b><span class="ed">${fmtDate(p.date)}</span></div>
+      ${p.note?`<p>${nl2br(p.note)}</p>`:''}${p.material?`<p><i>Material:</i> ${nl2br(p.material)}</p>`:''}${bl.length?`<p><i>Belege:</i> ${bl.map(b=>esc(belegLabel(b))).join('; ')}</p>`:''}
+      ${p.photoIds.length?`<div class="eph">${p.photoIds.map(id=>`<img src="${urlOf(id)}" alt="">`).join('')}</div>`:''}</div>`}).join('')}</section>`}}
+  const bs=belegeSorted();
+  if(o.list&&bs.length){const fn=id=>floorById(id)?.name||'';
+    h+=`<section class="blist"><h2>Belegliste</h2><table><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Kategorie</th><th>Pins</th><th style="text-align:right">CHF</th></tr></thead><tbody>
+    ${bs.map(b=>`<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.category)}</td><td>${S.pins.filter(p=>p.belegIds.includes(b.id)).map(p=>esc(fn(p.floorId))+' '+p.nr).join(', ')}</td><td style="text-align:right">${b.amount===''?'':chf(b.amount)}</td></tr>`).join('')}
+    <tr class="tot"><td colspan="6">Total</td><td style="text-align:right">${chf(bs.reduce((s,b)=>s+(+b.amount||0),0))}</td></tr></tbody></table>
+    <h3>Totale nach Kategorie</h3><table><tbody>${CATS.filter(c=>bs.some(b=>b.category===c)).map(c=>`<tr><td>${c}</td><td style="text-align:right">${chf(bs.filter(b=>b.category===c).reduce((s,b)=>s+(+b.amount||0),0))}</td></tr>`).join('')}</tbody></table>
+    <h3>Totale nach Jahr</h3><table><tbody>${[...new Set(bs.map(b=>(b.date||'').slice(0,4)))].sort().map(y=>`<tr><td>${y||'ohne Datum'}</td><td style="text-align:right">${chf(bs.filter(b=>(b.date||'').slice(0,4)===y).reduce((s,b)=>s+(+b.amount||0),0))}</td></tr>`).join('')}</tbody></table></section>`}
+  if(o.att)for(const b of bs){if(!b.previewId)continue;const pg=(blobMap.get(b.previewId)||{}).pages;
+    h+=`<section class="att"><h3>B-${pad(b.nr)} · ${fmtDate(b.date)} · ${esc(b.supplier||b.desc)}${b.amount!==''?' · CHF '+chf(b.amount):''}${pg>1?` <span style="font-weight:400;color:#666">(Seite 1 von ${pg})</span>`:''}</h3><img src="${urlOf(b.previewId)}" alt=""></section>`}
+  const pr=$('#print');pr.innerHTML=h;
+  await Promise.all([...pr.querySelectorAll('img')].map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r})));
+  $('#toast').hidden=true;const old=document.title;document.title=P.name||'Baustellenprotokoll';
+  setTimeout(()=>{window.print();document.title=old},150);
+}
+
+/* ---------- Sicherung ---------- */
+const toDataURL=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(b)});
+function fromDataURL(u){const i=u.indexOf(',');const mime=(u.slice(0,i).match(/:(.*?);/)||[])[1]||'application/octet-stream';const bin=atob(u.slice(i+1));const a=new Uint8Array(bin.length);for(let k=0;k<bin.length;k++)a[k]=bin.charCodeAt(k);return new Blob([a],{type:mime})}
+async function doBackup(){toast('Sicherung wird erstellt …',60000);
+  try{const parts=[`{"app":"baustellenprotokoll","version":1,"date":${JSON.stringify(new Date().toISOString())},"project":${JSON.stringify(S.project)},"floors":${JSON.stringify(S.floors)},"pins":${JSON.stringify(S.pins)},"belege":${JSON.stringify(S.belege)},"blobs":[`];
+    let first=true;for(const b of S.blobs){if(!b.blob)continue;const {blob,...meta}=b;parts.push((first?'':',')+JSON.stringify(Object.assign(meta,{data:await toDataURL(blob)})));first=false}
+    parts.push(']}');const out=new Blob(parts,{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(out);
+    a.download=`Sicherung ${(S.project.name||'Baustellenprotokoll').replace(/[\\/:*?"<>|]/g,'')} ${today()}.json`;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),60000);toast(`Sicherung gespeichert (${(out.size/1048576).toFixed(1)} MB)`,4000)}
+  catch(e){console.error(e);toast('Sicherung fehlgeschlagen: '+e.message,6000)}}
+async function doRestore(file){if(!file)return;
+  let d;try{d=JSON.parse(await file.text())}catch(e){alert('Die Datei ist keine gültige Sicherung.');return}
+  if(d.app!=='baustellenprotokoll'){alert('Die Datei ist keine Sicherung des Baustellenprotokolls.');return}
+  if(!confirm(`Sicherung vom ${fmtDate((d.date||'').slice(0,10))} laden?\n\n${(d.floors||[]).length} Geschosse, ${(d.pins||[]).length} Pins, ${(d.belege||[]).length} Belege.\n\nDie aktuellen Daten in diesem Browser werden dabei ersetzt.`))return;
+  toast('Sicherung wird geladen …',60000);
+  try{for(const s of ['kv','floors','pins','belege','blobs'])await dbClear(s);
+    for(const u of urls.values())URL.revokeObjectURL(u);urls.clear();blobMap.clear();
+    S.project=Object.assign({id:'project'},d.project||{});S.floors=d.floors||[];S.pins=d.pins||[];S.belege=d.belege||[];S.blobs=[];
+    await dbPut('kv',S.project);for(const f of S.floors)await dbPut('floors',f);for(const p of S.pins)await dbPut('pins',p);for(const b of S.belege)await dbPut('belege',b);
+    for(const r of d.blobs||[]){const {data,...meta}=r;const rec=Object.assign(meta,{blob:fromDataURL(data)});await dbPut('blobs',rec);S.blobs.push(rec);blobMap.set(rec.id,rec)}
+    UI.floor=floorsSorted()[0]?.id||null;UI.pin=null;render();toast('Sicherung geladen',3000);const m=await syncMeta();m.lastPull=null;await rawPut('kv',m);syncNow()}
+  catch(e){console.error(e);alert('Fehler beim Laden: '+e.message)}}
+
+/* ---------- Cloud (Supabase) ---------- */
+/* Einmalig eintragen: Project URL und anon/public key aus Supabase → Project Settings → API */
+const CFG={url:'https://mjitkzajdbxqlrkfqqye.supabase.co',key:'sb_publishable_hO6tvZloIsSQPcuR-0DNgg_tZnpcdzU'};
+const cloudOn=()=>!!(CFG.url&&CFG.key);
+let SES=null;try{SES=JSON.parse(localStorage.getItem('bp_session')||'null')}catch(e){}
+let SYNCMETA={id:'sync',lastPull:null,initialized:false};
+const syncMeta=async()=>SYNCMETA;
+let syncing=false,syncAgain=false,syncTimer=null,lastErr='',SSTATE='off';
+class AuthError extends Error{}
+function saveSes(){try{if(SES)localStorage.setItem('bp_session',JSON.stringify(SES));else localStorage.removeItem('bp_session')}catch(e){}}
+async function authReq(grant,body){
+  const r=await fetch(`${CFG.url}/auth/v1/token?grant_type=${grant}`,{method:'POST',headers:{apikey:CFG.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new AuthError(j.error_description||j.msg||j.message||'Anmeldung fehlgeschlagen');
+  SES={access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Math.floor(Date.now()/1000)+(j.expires_in||3600),email:(j.user&&j.user.email)||(SES&&SES.email)||''};saveSes()}
+async function ensureToken(){if(!SES)throw new AuthError('Nicht angemeldet');
+  if(SES.expires_at-120<Date.now()/1000){try{await authReq('refresh_token',{refresh_token:SES.refresh_token})}catch(e){if(e instanceof AuthError){SES=null;saveSes();showLogin()}throw e}}}
+async function api(path,opt={}){await ensureToken();
+  const r=await fetch(CFG.url+path,Object.assign({},opt,{headers:Object.assign({apikey:CFG.key,Authorization:'Bearer '+SES.access_token},opt.headers||{})}));
+  if(r.status===401){SES.expires_at=0;saveSes();throw new Error('Sitzung abgelaufen')}
+  if(!r.ok){const t=await r.text().catch(()=>'');throw new Error(`Server ${r.status}: ${t.slice(0,160)}`)}return r}
+async function upsertItems(rows){if(!rows.length)return;
+  await api('/rest/v1/items?on_conflict=id',{method:'POST',headers:{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)})}
+async function dequeueIf(e){await tx('queue','readwrite',st=>{const g=st.get(e.id);g.onsuccess=()=>{if(g.result&&g.result.t===e.t)st.delete(e.id)}})}
+const queueCount=async()=>(await dbAll('queue')).length;
+function localRec(store,id){if(store==='kv')return id==='project'?S.project:null;return (S[store]||[]).find(x=>x.id===id)||null}
+const blobMeta=r=>{const {blob,id,...m}=r;return m};
+
+async function firstUpload(){if(SYNCMETA.initialized)return;
+  const hasData=S.floors.length||S.pins.length||S.belege.length;
+  if(hasData){await enqueue('kv','project','put');for(const st of ['blobs','floors','belege','pins'])for(const r of S[st])await enqueue(st,r.id,'put')}
+  SYNCMETA.initialized=true;await rawPut('kv',SYNCMETA)}
+async function push(){
+  const q=(await dbAll('queue')).sort((a,b)=>a.t-b.t);if(!q.length)return;
+  let n=0;const tot=q.filter(e=>e.store==='blobs'&&e.op==='put').length;
+  for(const e of q.filter(e=>e.store==='blobs')){const rec=blobMap.get(e.recId);
+    if(e.op==='put'){if(rec&&rec.blob){setSync('busy',`Lade Dateien hoch (${++n}/${tot}) …`);
+        await api(`/storage/v1/object/files/${e.recId}`,{method:'POST',headers:{'x-upsert':'true','Content-Type':rec.mime||'application/octet-stream'},body:rec.blob});
+        await upsertItems([{id:e.recId,kind:'blob',data:blobMeta(rec),deleted:false}])}}
+    else{try{await api(`/storage/v1/object/files/${e.recId}`,{method:'DELETE'})}catch(_){}
+      await upsertItems([{id:e.recId,kind:'blob',data:null,deleted:true}])}
+    await dequeueIf(e)}
+  const rest=q.filter(e=>e.store!=='blobs');
+  for(let i=0;i<rest.length;i+=200){const ch=rest.slice(i,i+200);
+    await upsertItems(ch.map(e=>{const rec=e.op==='put'?localRec(e.store,e.recId):null;return {id:e.recId,kind:SYNC_KIND[e.store],data:rec,deleted:!rec}}));
+    for(const e of ch)await dequeueIf(e)}}
+async function applyRemote(r,pending){
+  const store=STORE_OF[r.kind];if(!store||pending.has(store+'|'+r.id))return false;
+  if(store==='blobs'){const ex=blobMap.get(r.id);
+    if(r.deleted){if(!ex)return false;await rawDel('blobs',r.id);S.blobs=S.blobs.filter(b=>b.id!==r.id);blobMap.delete(r.id);if(urls.has(r.id)){URL.revokeObjectURL(urls.get(r.id));urls.delete(r.id)}return true}
+    if(ex)return false;const rec=Object.assign({},r.data||{},{id:r.id,blob:null});await rawPut('blobs',rec);S.blobs.push(rec);blobMap.set(r.id,rec);return true}
+  if(store==='kv'){if(r.deleted||!r.data)return false;if(JSON.stringify(S.project)===JSON.stringify(r.data))return false;S.project=Object.assign({id:'project'},r.data);await rawPut('kv',S.project);return true}
+  const arr=S[store],i=arr.findIndex(x=>x.id===r.id);
+  if(r.deleted){if(i<0)return false;arr.splice(i,1);await rawDel(store,r.id);return true}
+  const d=r.data;if(!d)return false;if(store==='pins'){d.photoIds=d.photoIds||[];d.belegIds=d.belegIds||[]}
+  if(i>=0&&JSON.stringify(arr[i])===JSON.stringify(d))return false;
+  if(i>=0)arr[i]=d;else arr.push(d);await rawPut(store,d);return true}
+async function pull(){
+  const since=SYNCMETA.lastPull?new Date(new Date(SYNCMETA.lastPull).getTime()-60000).toISOString():null;
+  const pending=new Set((await dbAll('queue')).map(e=>e.id));let off=0,maxT=SYNCMETA.lastPull,changed=false;
+  for(;;){const rows=await (await api(`/rest/v1/items?select=id,kind,data,deleted,updated_at${since?'&updated_at=gt.'+encodeURIComponent(since):''}&order=updated_at.asc,id.asc&limit=1000&offset=${off}`)).json();
+    for(const r of rows){if(!maxT||new Date(r.updated_at)>new Date(maxT))maxT=r.updated_at;if(await applyRemote(r,pending))changed=true}
+    if(rows.length<1000)break;off+=1000}
+  SYNCMETA.lastPull=maxT;await rawPut('kv',SYNCMETA);
+  if(changed){if(UI.floor&&!curFloor())UI.floor=floorsSorted()[0]?.id||null;else if(!UI.floor)UI.floor=floorsSorted()[0]?.id||null;softRender()}}
+let dlRunning=false;
+async function downloadMissing(){if(dlRunning)return;dlRunning=true;let n=0,last=Date.now();
+  try{for(const rec of S.blobs.filter(b=>!b.blob)){if(!SES||!navigator.onLine)break;
+      const r=await api(`/storage/v1/object/authenticated/files/${rec.id}`);rec.blob=await r.blob();await rawPut('blobs',rec);n++;
+      if(Date.now()-last>1500){last=Date.now();softRender()}}}
+  catch(e){console.warn('Download',e)}finally{dlRunning=false;if(n)softRender()}}
+let pendingRender=false;
+function softRender(){const a=document.activeElement;if(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)&&a.type!=='file'&&!a.closest('#login')){pendingRender=true;return}render()}
+document.addEventListener('focusout',()=>setTimeout(()=>{if(pendingRender&&!(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))){pendingRender=false;render()}},50));
+function scheduleSync(){clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncNow(),1500);setSync('pend')}
+function syncText(){return {ok:'Alles synchronisiert',busy:'Synchronisiere …',pend:'Änderungen werden hochgeladen …',off:'Offline – Änderungen werden später hochgeladen',err:'Fehler: '+lastErr}[SSTATE]||''}
+function setSync(st,label){SSTATE=st;const b=$('#syncBtn');if(!b)return;b.className='sync '+st;
+  const short={ok:'Synchron',busy:'Sync …',pend:'Ausstehend',off:'Offline',err:'Sync-Fehler'}[st];
+  b.querySelector('span').textContent=label&&st==='busy'?label.replace('Lade Dateien hoch','Upload'):short;b.title=syncText();const ci=$('#cloudInfo');if(ci)ci.textContent=label||syncText()}
+async function syncNow(manual){if(!cloudOn()||!SES)return;if(syncing){syncAgain=true;return}
+  if(!navigator.onLine){setSync('off');if(manual)toast('Keine Internetverbindung');return}
+  syncing=true;setSync('busy');
+  try{await firstUpload();await push();await pull();const q=await queueCount();setSync(q?'pend':'ok');if(manual)toast(q?'Noch nicht alles hochgeladen':'Alles synchronisiert')}
+  catch(e){console.warn(e);lastErr=e.message;setSync(e instanceof TypeError||!navigator.onLine?'off':'err');if(manual)toast(syncText(),5000)}
+  finally{syncing=false;if(syncAgain){syncAgain=false;setTimeout(()=>syncNow(),800)}}
+  downloadMissing()}
+function showLogin(){const l=$('#login');l.hidden=false;$('#lgErr').textContent='';setTimeout(()=>$('#lgEmail').focus(),50)}
+$('#lgForm').addEventListener('submit',async e=>{e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;$('#lgErr').textContent='';
+  try{await authReq('password',{email:$('#lgEmail').value.trim(),password:$('#lgPw').value});$('#lgPw').value='';$('#login').hidden=true;$('#syncBtn').hidden=false;toast('Angemeldet – Daten werden geladen …');await syncNow();render()}
+  catch(err){$('#lgErr').textContent=err instanceof AuthError?(/invalid/i.test(err.message)?'E-Mail oder Passwort falsch.':err.message):'Keine Verbindung zum Server.'}
+  finally{btn.disabled=false}});
+async function logout(){const q=await queueCount();
+  if(q&&!confirm(`${q} Änderung(en) sind noch nicht hochgeladen und gehen beim Abmelden verloren. Trotzdem abmelden?`))return;
+  if(!q&&!confirm('Abmelden? Die Daten auf diesem Gerät werden entfernt, in der Cloud bleiben sie erhalten.'))return;
+  try{fetch(CFG.url+'/auth/v1/logout',{method:'POST',headers:{apikey:CFG.key,Authorization:'Bearer '+SES.access_token}})}catch(e){}
+  for(const s of ['kv','floors','pins','belege','blobs','queue'])await dbClear(s);
+  SES=null;saveSes();location.reload()}
+
+/* ---------- Start ---------- */
+(async()=>{
+  try{await openDB()}catch(e){document.body.innerHTML='<p style="padding:40px">Der Browser erlaubt hier keine lokale Datenbank. Bitte die Datei mit Chrome oder Safari öffnen.</p>';return}
+  const [kv,f,p,b,bl]=await Promise.all(['kv','floors','pins','belege','blobs'].map(dbAll));
+  const pr=kv.find(x=>x.id==='project');if(pr)S.project=Object.assign(S.project,pr);
+  SYNCMETA=kv.find(x=>x.id==='sync')||{id:'sync',lastPull:null,initialized:false};
+  S.floors=f;S.pins=p;S.belege=b;S.blobs=bl;bl.forEach(x=>blobMap.set(x.id,x));
+  for(const x of S.pins){x.photoIds=x.photoIds||[];x.belegIds=x.belegIds||[]}
+  UI.floor=floorsSorted()[0]?.id||null;
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(e=>console.warn(e));
+  render();
+  if(cloudOn()){$('#syncBtn').hidden=false;if(!SES)showLogin();else{setSync(navigator.onLine?'busy':'off');syncNow()}
+    window.addEventListener('online',()=>syncNow());window.addEventListener('offline',()=>setSync('off'));
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow()});
+    setInterval(()=>{if(document.visibilityState==='visible')syncNow()},30000)}
+})();
+</script>
+</body>
+</html>
