@@ -94,6 +94,10 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .bt tr.hl td{background:var(--acc2)}
 .bt input.auto{background:#fef9c3!important;border-color:#eab308!important}
 .bt .ra{display:flex;gap:4px}
+.spl div{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.spl .spi{width:84px!important;text-align:right;padding:4px 6px!important;border:1px solid var(--line)!important;background:#fff!important;border-radius:5px}
+.spl small{display:block;font-size:11px}
+.spl small.bad{color:#b91c1c;font-weight:600}
 .bt input,.bt select{width:100%;border:1px solid transparent;background:transparent;padding:5px 6px;border-radius:5px}
 .bt input:hover,.bt select:hover,.bt input:focus{border-color:var(--line);background:#fff;outline:none}
 .r{text-align:right}
@@ -279,6 +283,9 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
   .enr{flex:none;width:7mm;height:7mm;border-radius:50%;background:#c2410c;color:#fff;font-weight:700;font-size:9pt;display:flex;align-items:center;justify-content:center}
   .ed{margin-left:auto;color:#666}
   .entry p{margin:1mm 0 2mm}
+  .pinsec{break-before:page}
+  .ph{font-size:11pt;margin:5mm 0 2mm;border-bottom:.5pt solid #ccc;padding-bottom:1mm}
+  .ptot{margin-top:4mm;padding:2.5mm 3mm;background:#f6f3ee;border-left:1.2mm solid #c2410c;font-weight:700}
   .ent-p{margin:1mm 0 4mm 9mm;border-left:.8pt solid #ddd;padding-left:3mm;break-inside:auto}
   .ent-p .edt{font-weight:700;color:#c2410c;margin-bottom:1mm}
   .mt{width:100%;border-collapse:collapse;font-size:9pt;margin:1mm 0 2mm}
@@ -351,7 +358,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='10 (05.10.2026)';
+const APP_VERSION='11 (05.10.2026)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 const GEWERKE=['Holzbau','Sanitär','Elektro','Fliesen','Gipser','Maler'];
 const GWC={Holzbau:'#92400e',Sanitär:'#2563eb',Elektro:'#ca8a04',Fliesen:'#0d9488',Gipser:'#6b7280',Maler:'#9333ea'};
@@ -433,6 +440,15 @@ async function linkBeleg(p,e,bid,g){if(!p||!e)return;if(!e.belegIds.includes(bid
   const b=S.belege.find(x=>x.id===bid);if(b&&g&&!b.gewerk){b.gewerk=g;await dbPut('belege',b)}}
 async function unlinkBeleg(p,e,bid){if(!p||!e)return;e.belegIds=e.belegIds.filter(x=>x!==bid);delete e.belegGw[bid];await dbPut('pins',p)}
 const qfmt=n=>n===''||n==null?'':(+n).toLocaleString('de-CH',{maximumFractionDigits:3});
+/* Aufteilung eines Belegs auf mehrere Pins: feste Anteile (b.split) + Rest gleichmässig */
+function belegShares(b){const pins=S.pins.filter(p=>pinBelegIds(p).includes(b.id)),amt=+b.amount||0,m=new Map();if(!pins.length)return m;
+  const sp=b.split||{},fixed=pins.filter(p=>sp[p.id]!==undefined&&sp[p.id]!==''&&sp[p.id]!=null),free=pins.filter(p=>!fixed.includes(p));
+  const fixedSum=fixed.reduce((x,p)=>x+(+sp[p.id]||0),0);for(const p of fixed)m.set(p.id,+sp[p.id]||0);
+  if(free.length){const rest=Math.max(0,Math.round((amt-fixedSum)*100)/100),each=Math.floor(rest/free.length*100)/100;
+    free.forEach((p,i)=>m.set(p.id,i===free.length-1?Math.round((rest-each*(free.length-1))*100)/100:each))}
+  return m}
+const shareOf=(b,pid)=>belegShares(b).get(pid)||0;
+const splitDiff=b=>{const m=belegShares(b);if(m.size<2)return 0;return Math.round(((+b.amount||0)-[...m.values()].reduce((x,y)=>x+y,0))*100)/100};
 const pinLabel=p=>`${floorLabel(floorById(p.floorId))} ${p.nr}${p.title?' – '+p.title:''}`;
 const belegLabel=b=>`B-${pad(b.nr)} ${b.supplier||b.desc||''}${b.amount!==''&&b.amount!=null?' · CHF '+chf(b.amount):''}`;
 const isPdfBeleg=b=>(blobMap.get(b.fileId)||{}).mime==='application/pdf';
@@ -586,7 +602,7 @@ function renderPinPanel(){
 }
 function entryEditor(p,e){
   const avail=belegeSorted().filter(b=>!e.belegIds.includes(b.id));
-  const chip=b=>`<span class="chip"><a data-act="gotoBeleg" data-id="${b.id}">${esc(belegLabel(b))}</a><button data-act="unlink" data-id="${b.id}" title="Zuordnung lösen">×</button></span>`;
+  const chip=b=>`<span class="chip"><a data-act="gotoBeleg" data-id="${b.id}">${esc(belegLabel(b))}${belegShares(b).size>1?' · Anteil '+chf(shareOf(b,p.id)):''}</a><button data-act="unlink" data-id="${b.id}" title="Zuordnung lösen">×</button></span>`;
   const opt=b=>`<option value="${b.id}">${esc(belegLabel(b))}</option>`;
   const sel=g=>{if(!avail.length)return '<p class="mut" style="font-size:12px;margin:0">Keine weiteren Belege vorhanden – erfassen im Reiter «Belege».</p>';
     const own=g?avail.filter(b=>b.gewerk===g):[],none=avail.filter(b=>!b.gewerk),oth=avail.filter(b=>b.gewerk&&b.gewerk!==g);
@@ -658,7 +674,8 @@ function renderBelege(){
       <td><select data-bf="category">${CATS.map(c=>`<option ${b.category===c?'selected':''}>${c}</option>`).join('')}</select></td>
       <td><select data-bf="gewerk"><option value="">–</option>${GEWERKE.map(g=>`<option ${b.gewerk===g?'selected':''}>${g}</option>`).join('')}</select></td>
       <td><input class="r ${b.auto&&b.auto.amount?'auto':''}" data-bf="amount" inputmode="decimal" value="${b.amount===''||b.amount==null?'':chf(b.amount)}" placeholder="0.00"></td>
-      <td>${pins.map(p=>`<a class="pb" data-act="gotoPin" data-id="${p.id}" data-b="${b.id}" title="${esc(p.title)}">${esc(fn(p.floorId))} ${p.nr}</a>`).join(' ')}
+      <td>${pins.length>1?(()=>{const sh=belegShares(b),sp=b.split||{},d=splitDiff(b);return `<div class="spl">${pins.map(p=>`<div><a class="pb" data-act="gotoPin" data-id="${p.id}" data-b="${b.id}" title="${esc(p.title)}">${esc(fn(p.floorId))} ${p.nr}</a><input class="spi" data-split="${p.id}" inputmode="decimal" value="${sp[p.id]!==undefined&&sp[p.id]!==''?chf(sp[p.id]):''}" placeholder="${chf(sh.get(p.id)||0)}" title="Anteil CHF für diesen Pin (leer = gleichmässig)"></div>`).join('')}<small class="${d?'bad':'mut'}">${d?'Differenz CHF '+chf(d):(Object.keys(sp).some(k=>pins.some(p=>p.id===k))?'aufgeteilt':'gleichmässig aufgeteilt')}</small></div>`})()
+        :pins.map(p=>`<a class="pb" data-act="gotoPin" data-id="${p.id}" data-b="${b.id}" title="${esc(p.title)}">${esc(fn(p.floorId))} ${p.nr}</a>`).join(' ')}
         ${S.pins.length>pins.length?`<select class="lp" data-ch="linkPin"><option value="">+ Pin zuordnen …</option>${orderedFloors().map(f=>{const ps=pinsOf(f.id).filter(p=>!pinBelegIds(p).includes(b.id));return ps.length?`<optgroup label="${esc(floorLabel(f))}">${ps.map(p=>`<option value="${p.id}">${p.nr}${p.title?' – '+esc(p.title):''}</option>`).join('')}</optgroup>`:''}).join('')}</select>`:''}</td>
       <td><div class="ra"><button class="b sm" data-act="readBeleg" data-id="${b.id}" title="Betrag, Datum und Lieferant automatisch erkennen">✨</button><button class="b d sm" data-act="delBeleg" data-id="${b.id}" title="Beleg löschen">×</button></div></td></tr>`}).join('')}</tbody></table></div>`
     :`<p class="mut c">${S.belege.length?'Keine Belege für diesen Filter.':'Noch keine Belege erfasst.'}</p>`}`;
@@ -676,7 +693,7 @@ function renderExport(){
    <label>Zeitraum<input data-pf="period" value="${esc(P.period)}" placeholder="z.B. 2021 – 2025"></label>
    <div class="opts">
     <label class="ck"><input type="checkbox" data-opt="plans" ${o.plans?'checked':''}> Grundrisse mit Pins</label>
-    <label class="ck"><input type="checkbox" data-opt="entries" ${o.entries?'checked':''}> Einträge mit Bemerkungen und Fotos</label>
+    <label class="ck"><input type="checkbox" data-opt="entries" ${o.entries?'checked':''}> Pro Pin: Fortschritte, Fotos und Belege (mit Aufteilung)</label>
     <label class="ck"><input type="checkbox" data-opt="mats" ${o.mats?'checked':''}> Materialbezug pro Gewerk mit Kosten</label>
     <label class="ck"><input type="checkbox" data-opt="list" ${o.list?'checked':''}> Belegliste mit Totalen pro Kategorie</label>
     <label class="ck"><input type="checkbox" data-opt="att" ${o.att?'checked':''}> Belege als Anhang (eine Seite pro Beleg)</label>
@@ -856,6 +873,7 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(d.opt){UI.opts[d.opt]=t.checked;return}
   if(d.bld){const b=bldById(d.bld);if(!b||!t.value.trim())return renderPlan();b.name=t.value.trim();await dbPut('buildings',b);renderFloorList();renderStage();return}
   if(d.pf){S.project[d.pf]=t.value;await dbPut('kv',S.project);if(d.pf==='name')document.querySelectorAll('[data-pf="name"]').forEach(i=>{if(i!==t)i.value=t.value});return}
+  if(d.split){const b=belegById(t.closest('tr').dataset.id);if(!b)return;b.split=b.split||{};const v=parseAmount(t.value);if(v==='')delete b.split[d.split];else b.split[d.split]=v;await dbPut('belege',b);renderBelege();return}
   if(d.bf){const b=belegById(t.closest('tr').dataset.id);if(!b)return;if(b.auto&&b.auto[d.bf]){b.auto[d.bf]=false;t.classList.remove('auto')}if(d.bf==='date')b.dateAuto=false;
     if(d.bf==='amount'){b.amount=parseAmount(t.value);t.value=b.amount===''?'':chf(b.amount)}
     else if(d.bf==='gewerk'){const old=b.gewerk||'';b.gewerk=t.value;for(const p of S.pins){let ch=false;for(const e of p.entries)if(e.belegIds.includes(b.id)&&(e.belegGw[b.id]||'')===old){e.belegGw[b.id]=b.gewerk;ch=true}if(ch)await dbPut('pins',p)}}
@@ -932,19 +950,32 @@ async function doPrint(){
    <tr><td>Umfang</td><td>${fl.length} Plan/Pläne · ${S.pins.length} Pins · ${S.pins.reduce((s,p)=>s+p.entries.length,0)} Einträge · ${S.pins.reduce((s,p)=>s+pinPhotos(p).length,0)} Fotos · ${S.belege.length} Belege</td></tr>
    ${allMats().length?`<tr><td>Material total</td><td>CHF ${chf(matTotal(allMats()))}<br><small>${GEWERKE.map(g=>{const t=matTotal(allMats().filter(m=>(m.gw||'Holzbau')===g));return t?g+' '+chf(t):''}).filter(Boolean).join(' · ')}</small></td></tr>`:''}
    ${S.belege.length?`<tr><td>Total Belege</td><td>CHF ${chf(S.belege.reduce((s,b)=>s+(+b.amount||0),0))}</td></tr>`:''}</table>
-   <h3>Inhalt</h3><ol>${fl.map(f=>`<li>${esc(floorLabel(f))} (${pinsOf(f.id).length} Pins)</li>`).join('')}${o.mats&&allMats().length?'<li>Materialbezug</li>':''}${o.list&&S.belege.length?'<li>Belegliste</li>':''}${o.att&&S.belege.length?'<li>Anhang: Belege</li>':''}</ol></section>`;
+   <h3>Inhalt</h3><ol>${fl.map(f=>`<li>${esc(floorLabel(f))} (${pinsOf(f.id).length} Pins)</li>`).join('')}${o.entries?'<li>Kostenübersicht pro Pin</li>':''}${o.mats&&allMats().length?'<li>Materialbezug</li>':''}${o.list&&S.belege.length?'<li>Belegliste</li>':''}${o.att&&S.belege.length?'<li>Anhang: Belege</li>':''}</ol></section>`;
   const G=o.gw,eOk=e=>!G||entTags(e).includes(G);
   for(const f of fl){const pins=pinsOf(f.id).filter(p=>p.entries.some(eOk));if(G&&!pins.length)continue;
     if(o.plans&&f.planId){const b=blobMap.get(f.planId)||{};const w=b.w||1,hh=b.h||1;const wmm=Math.min(184,240*w/hh);
       h+=`<section class="pg"><h2>${esc(floorLabel(f))}${isSite(f)?'':' – Grundriss'}</h2><div class="pplan" style="width:${wmm.toFixed(1)}mm"><img src="${urlOf(f.planId)}" alt="">${areasHtml(f)}${pins.map(p=>`<span class="pin" style="left:${p.x*100}%;top:${p.y*100}%">${p.nr}</span>`).join('')}</div></section>`}
-    if(o.entries&&pins.length){h+=`<section class="pg"><h2>${esc(floorLabel(f))} – Einträge</h2>${pins.map(p=>{const es=entriesOf(p).filter(eOk);
-      return `<div class="entry"><div class="eh"><span class="enr">${p.nr}</span><b>${esc(p.title||'Ohne Titel')}</b><span class="ed">${fmtDate(es[0].date)}${es.length>1?' – '+fmtDate(es[es.length-1].date):''}</span></div>
+    if(o.entries)for(const p of pins){const es=entriesOf(p).filter(eOk);
+      const pb=belegeSorted().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||b.gewerk===G));
+      const bSum=pb.reduce((x,b)=>x+shareOf(b,p.id),0),mSum=matTotal(es.flatMap(e=>e.mats));
+      h+=`<section class="pinsec"><h2><span class="enr" style="display:inline-flex;margin-right:2mm;vertical-align:middle">${p.nr}</span>${esc(p.title||'Ohne Titel')} <span style="font-weight:400;color:#666;font-size:12pt">· ${esc(floorLabel(f))}</span></h2>
+      <h3 class="ph">Fortschritte${es.length?` <span style="font-weight:400;color:#666">(${fmtDate(es[0].date)}${es.length>1?' – '+fmtDate(es[es.length-1].date):''})</span>`:''}</h3>
       ${es.map(e=>`<div class="ent-p"><div class="edt">${fmtDate(e.date)||'ohne Datum'}${entTags(e).length?` <span style="font-weight:400;color:#555">· ${entTags(e).join(', ')}</span>`:''}</div>
         ${e.note?`<p>${nl2br(e.note)}</p>`:''}${e.material?`<p><i>Material:</i> ${nl2br(e.material)}</p>`:''}
-        ${GEWERKE.map(g=>{const t=e.gwText[g]||'',gb=entBelegeGw(e,g),ms=matsOf(e,g).map(x=>x[0]);if(!t&&!gb.length&&!ms.length)return '';
-          return `<p><b>${g}:</b> ${nl2br(t)}</p>${ms.length?matTable(ms):''}${gb.length?`<p><i>Belege ${g}:</i> ${gb.map(b=>esc(belegLabel(b))).join('; ')}</p>`:''}`}).join('')}
-        ${entBelegeGw(e,'').length?`<p><i>Weitere Belege:</i> ${entBelegeGw(e,'').map(b=>esc(belegLabel(b))).join('; ')}</p>`:''}
-        ${e.photoIds.length?`<div class="eph">${e.photoIds.map(id=>`<img src="${urlOf(id)}" alt="">`).join('')}</div>`:''}</div>`).join('')}</div>`}).join('')}</section>`}}
+        ${GEWERKE.map(g=>{const t=e.gwText[g]||'',ms=matsOf(e,g).map(x=>x[0]);if(!t&&!ms.length)return '';return `${t?`<p><b>${g}:</b> ${nl2br(t)}</p>`:`<p><b>${g}-Material:</b></p>`}${ms.length?matTable(ms):''}`}).join('')}
+        ${e.photoIds.length?`<div class="eph">${e.photoIds.map(id=>`<img src="${urlOf(id)}" alt="">`).join('')}</div>`:''}</div>`).join('')||'<p style="color:#666">Keine Einträge.</p>'}
+      <h3 class="ph">Belege</h3>
+      ${pb.length?`<table class="mt"><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Gewerk</th><th class="r">Beleg CHF</th><th class="r">Anteil Pin CHF</th></tr></thead><tbody>
+        ${pb.map(b=>{const n=belegShares(b).size;return `<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.gewerk||'')}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td><td class="r">${chf(shareOf(b,p.id))}${n>1?`<br><small style="color:#666">aufgeteilt auf ${n} Pins</small>`:''}</td></tr>`}).join('')}
+        <tr class="tot"><td colspan="6">Total Belege Pin ${p.nr}</td><td class="r">${chf(bSum)}</td></tr></tbody></table>`:'<p style="color:#666">Keine Belege zugeordnet.</p>'}
+      <div class="ptot">Kosten Pin ${p.nr}: Belege CHF ${chf(bSum)}${mSum?` · Holzbau-Material CHF ${chf(mSum)} · Total CHF ${chf(bSum+mSum)}`:''}</div></section>`}}
+  if(o.entries){const rows=[];let tb=0,tm=0;
+    for(const f of fl)for(const p of pinsOf(f.id).filter(p=>p.entries.some(eOk))){const bS=belegeSorted().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||b.gewerk===G)).reduce((x,b)=>x+shareOf(b,p.id),0),mS=matTotal(entriesOf(p).filter(eOk).flatMap(e=>e.mats));tb+=bS;tm+=mS;rows.push(`<tr><td>${esc(floorLabel(f))}</td><td>${p.nr} ${esc(p.title||'')}</td><td class="r">${chf(bS)}</td><td class="r">${mS?chf(mS):''}</td><td class="r">${chf(bS+mS)}</td></tr>`)}
+    const ohne=belegeSorted().filter(b=>(!G||b.gewerk===G)&&!S.pins.some(p=>pinBelegIds(p).includes(b.id)));const to=ohne.reduce((x,b)=>x+(+b.amount||0),0);
+    h+=`<section class="msum"><h2>Kostenübersicht pro Pin</h2><table class="mt"><thead><tr><th>Plan</th><th>Pin</th><th class="r">Belege CHF</th><th class="r">Holzbau-Material CHF</th><th class="r">Total CHF</th></tr></thead><tbody>${rows.join('')}
+      <tr class="tot"><td colspan="2">Total Pins</td><td class="r">${chf(tb)}</td><td class="r">${tm?chf(tm):''}</td><td class="r">${chf(tb+tm)}</td></tr></tbody></table>
+      ${ohne.length?`<h3>Belege ohne Pin-Zuordnung</h3><table class="mt"><tbody>${ohne.map(b=>`<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td></tr>`).join('')}<tr class="tot"><td colspan="4">Total ohne Pin</td><td class="r">${chf(to)}</td></tr></tbody></table>`:''}
+      <h3>Gesamt</h3><table class="mt"><tbody><tr><td>Belege (Pins + ohne Pin)</td><td class="r">CHF ${chf(tb+to)}</td></tr>${tm?`<tr><td>Holzbau-Material (Regiepreisliste netto)</td><td class="r">CHF ${chf(tm)}</td></tr>`:''}<tr class="tot"><td>Total</td><td class="r">CHF ${chf(tb+to+tm)}</td></tr></tbody></table></section>`}
   if(o.mats&&allMats().length&&(!o.gw||o.gw==='Holzbau')){const all=allMats();
     h+=`<section class="msum"><h2>Materialbezug</h2><p style="color:#666">Summe aller Einträge pro Gewerk. Holzbau: Netto-Einkaufspreise gemäss Regiepreisliste S-0113; übrige Gewerke: erfasste Preise der Lieferanten.</p>`;
     for(const g of GEWERKE){const ms=all.filter(m=>(m.gw||'Holzbau')===g);if(!ms.length)continue;const agg=new Map();
@@ -956,7 +987,7 @@ async function doPrint(){
   const bs=belegeSorted().filter(b=>!o.gw||b.gewerk===o.gw);
   if(o.list&&bs.length){const fn=id=>floorLabel(floorById(id));
     h+=`<section class="blist"><h2>Belegliste</h2><table><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Kategorie</th><th>Gewerk</th><th>Pins</th><th style="text-align:right">CHF</th></tr></thead><tbody>
-    ${bs.map(b=>`<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.category)}</td><td>${esc(b.gewerk||'')}</td><td>${S.pins.filter(p=>pinBelegIds(p).includes(b.id)).map(p=>esc(fn(p.floorId))+' '+p.nr).join(', ')}</td><td style="text-align:right">${b.amount===''?'':chf(b.amount)}</td></tr>`).join('')}
+    ${bs.map(b=>`<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.category)}</td><td>${esc(b.gewerk||'')}</td><td>${(()=>{const sh=belegShares(b);return S.pins.filter(p=>pinBelegIds(p).includes(b.id)).map(p=>esc(fn(p.floorId))+' '+p.nr+(sh.size>1?' ('+chf(sh.get(p.id)||0)+')':'')).join(', ')})()}</td><td style="text-align:right">${b.amount===''?'':chf(b.amount)}</td></tr>`).join('')}
     <tr class="tot"><td colspan="7">Total</td><td style="text-align:right">${chf(bs.reduce((s,b)=>s+(+b.amount||0),0))}</td></tr></tbody></table>
     <h3>Totale nach Gewerk</h3><table><tbody>${[...GEWERKE,''].filter(g=>bs.some(b=>(b.gewerk||'')===g)).map(g=>`<tr><td>${g||'Ohne Gewerk'}</td><td style="text-align:right">${chf(bs.filter(b=>(b.gewerk||'')===g).reduce((s,b)=>s+(+b.amount||0),0))}</td></tr>`).join('')}</tbody></table>
     <h3>Totale nach Kategorie</h3><table><tbody>${CATS.filter(c=>bs.some(b=>b.category===c)).map(c=>`<tr><td>${c}</td><td style="text-align:right">${chf(bs.filter(b=>b.category===c).reduce((s,b)=>s+(+b.amount||0),0))}</td></tr>`).join('')}</tbody></table>
