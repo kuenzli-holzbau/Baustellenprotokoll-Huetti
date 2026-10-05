@@ -260,7 +260,7 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 </head>
 <body>
 <header>
-  <span class="logo">🏗️</span>
+  <span class="logo" id="logo">🏗️</span>
   <input id="projName" data-pf="name" placeholder="Name der Baustelle" title="Name der Baustelle">
   <nav>
     <button data-act="tab" data-id="plan">Grundrisse</button>
@@ -287,7 +287,7 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 <input type="file" id="planInput" accept="image/*,application/pdf" data-up="plan" hidden>
 <div id="lb" hidden data-act="closeLb"><img alt=""></div>
 <div id="toast" hidden></div>
-<div id="login" hidden><form id="lgForm" class="card"><h2>🏗️ Baustellenprotokoll</h2><p class="mut">Bitte mit deinem Konto anmelden.</p>
+<div id="login" hidden><form id="lgForm" class="card"><h2>🏗️ Baustellenprotokoll</h2><p class="mut">Bitte mit deinem Konto anmelden. <small id="lgVer"></small></p>
   <label>E-Mail<input type="email" id="lgEmail" autocomplete="username" required></label>
   <label>Passwort<input type="password" id="lgPw" autocomplete="current-password" required></label>
   <button class="b p big" type="submit" style="width:100%;justify-content:center">Anmelden</button><p id="lgErr" class="err"></p></form></div>
@@ -308,6 +308,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
+const APP_VERSION='5 (05.10.2026)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 const GEWERKE=['Holzbau','Sanitär','Elektro','Fliesen','Gipser','Maler'];
 /* Regiepreisliste Holzbau (S-0113, Netto-Einkaufspreise): [Art.-Nr., Bezeichnung, Einheit, CHF netto] */
@@ -421,7 +422,7 @@ async function renderPdfPage(doc,n,maxPx){const p=await doc.getPage(n);const v0=
 function render(){
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.id===UI.tab));
   document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!=='v-'+UI.tab);
-  $('#projName').value=S.project.name||'';
+  $('#projName').value=S.project.name||'';$('#logo').title='Version '+APP_VERSION;
   if(UI.tab==='plan')renderPlan();else if(UI.tab==='belege')renderBelege();else renderExport();
 }
 function renderPlan(){renderFloorList();renderStage();renderPinPanel()}
@@ -561,6 +562,7 @@ function renderExport(){
    <div class="card"><h2>Datensicherung</h2>
    <p>${cloudOn()?'Die Daten liegen in der Cloud und auf jedem angemeldeten Gerät. Eine zusätzliche Sicherungsdatei ab und zu schadet trotzdem nicht.':'Alle Angaben, Fotos und Belege sind in <b>diesem Browser</b> gespeichert. Speichere regelmässig eine Sicherung.'}</p>
    <p><button class="b p" data-act="backup">Sicherung speichern (.json)</button> <label class="b" style="display:inline-flex;margin:0">Sicherung laden …<input type="file" accept=".json,application/json" hidden data-up="restore"></label></p>
+   <p class="mut" style="font-size:12px">App-Version <b>${APP_VERSION}</b></p>
    <p class="mut" id="storeInfo">${S.floors.length} Geschosse · ${S.pins.length} Pins · ${S.belege.length} Belege · ${S.blobs.length} Dateien</p></div>`;
   if(navigator.storage&&navigator.storage.estimate)navigator.storage.estimate().then(e=>{const el=$('#storeInfo');if(el)el.textContent+=` · ${(e.usage/1048576).toFixed(1)} MB belegt`}).catch(()=>{});
 }
@@ -909,7 +911,7 @@ async function syncNow(manual){if(!cloudOn()||!SES)return;if(syncing){syncAgain=
   catch(e){console.warn(e);lastErr=e.message;setSync(e instanceof TypeError||!navigator.onLine?'off':'err');if(manual)toast(syncText(),5000)}
   finally{syncing=false;if(syncAgain){syncAgain=false;setTimeout(()=>syncNow(),800)}}
   downloadMissing()}
-function showLogin(){const l=$('#login');l.hidden=false;$('#lgErr').textContent='';setTimeout(()=>$('#lgEmail').focus(),50)}
+function showLogin(){const l=$('#login');l.hidden=false;$('#lgVer').textContent='(Version '+APP_VERSION+')';$('#lgErr').textContent='';setTimeout(()=>$('#lgEmail').focus(),50)}
 $('#lgForm').addEventListener('submit',async e=>{e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;$('#lgErr').textContent='';
   try{await authReq('password',{email:$('#lgEmail').value.trim(),password:$('#lgPw').value});$('#lgPw').value='';$('#login').hidden=true;$('#syncBtn').hidden=false;toast('Angemeldet – Daten werden geladen …');await syncNow();render()}
   catch(err){$('#lgErr').textContent=err instanceof AuthError?(/invalid/i.test(err.message)?'E-Mail oder Passwort falsch.':err.message):'Keine Verbindung zum Server.'}
