@@ -330,7 +330,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='7 (05.10.2026)';
+const APP_VERSION='8 (05.10.2026)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 const GEWERKE=['Holzbau','Sanitär','Elektro','Fliesen','Gipser','Maler'];
 /* Regiepreisliste Holzbau (S-0113, Netto-Einkaufspreise): [Art.-Nr., Bezeichnung, Einheit, CHF netto] */
@@ -339,6 +339,7 @@ const KATMAP=new Map(KAT.map(k=>[k[0],k]));
 const SUPPLIER={Holzbau:'Regiepreisliste',Elektro:'Elektrobedarf Troller'};
 const supplierOf=g=>SUPPLIER[g]||'Bauhaus';
 const SHOPSITE={'Elektrobedarf Troller':'elektrobedarf.ch','Bauhaus':'bauhaus.ch'};
+const SHOPURL={'Elektrobedarf Troller':'https://www.elektrobedarf.ch/shop','Bauhaus':'https://www.bauhaus.ch/de/'};
 const matsOf=(e,g)=>e.mats.map((m,i)=>[m,i]).filter(([m])=>(m.gw||'Holzbau')===g);
 
 let toastT;
@@ -518,7 +519,7 @@ function entryEditor(p,e){
       <label class="ck"><input type="checkbox" id="na-keep" checked> In «Meine Artikel» speichern (später wieder auffindbar)</label>
       <div class="mbtns" style="margin:0"><button class="b p sm" data-act="naSave" data-gw="${g}">Hinzufügen</button><button class="b sm" data-act="naCancel">Abbrechen</button></div></div>`:''}
     <input class="katq" data-katq data-gw="${g}" placeholder="🔍 ${g==='Holzbau'?'Preisliste & meine Artikel durchsuchen, z.B. OSB 18 …':'Meine Artikel durchsuchen …'}" autocomplete="off"><div class="katres"></div>
-    <div class="mbtns">${SHOPSITE[sup]?`<button class="b sm" data-act="shopSearch" data-gw="${g}">🔍 Bei ${esc(sup)} suchen</button>`:''}<button class="b sm" data-act="newArt" data-gw="${g}">+ Neuer Artikel</button></div></div>`};
+    <div class="mbtns">${SHOPSITE[sup]?`<button class="b sm" data-act="shopSearch" data-gw="${g}">🛒 Shop ${esc(sup)} öffnen</button>`:''}<button class="b sm" data-act="newArt" data-gw="${g}">+ Neuer Artikel</button></div></div>`};
   const gwBlock=g=>{const t=e.gwText[g]||'',bl=entBelegeGw(e,g),ml=matsOf(e,g).map(x=>x[0]);
     const info=[ml.length?ml.length+' Pos. · CHF '+chf(matTotal(ml)):'',t?'Notiz ✓':'',bl.length?bl.length+' Beleg(e)':''].filter(Boolean).join(' · ');
     return `<details class="gw" data-gw="${g}" ${UI.gwOpen.has(g)?'open':''}><summary><b>${g}</b><span class="${info?'has':''}">${info||'–'}</span></summary><div class="in">
@@ -707,8 +708,9 @@ const ACT={
     let artId='';if($('#na-keep')&&$('#na-keep').checked){const art={id:uid(),gw:g,name,code,unit,price:price===''?null:price,supplier:sup,url};S.articles.push(art);await dbPut('articles',art);artId=art.id}
     e.mats.push({gw:g,code,name,unit,price:price===''?null:price,qty:'',src:sup,url,artId});UI.newArt=null;UI.naName='';await dbPut('pins',p);renderPinPanel();focusLastQty()},
   shopSearch:(id,a)=>{const g=a.dataset.gw,sup=supplierOf(g),site=SHOPSITE[sup];const q=a.closest('.mats').querySelector('[data-katq]');const t=(q&&q.value.trim())||'';
-    window.open('https://www.google.com/search?q='+encodeURIComponent('site:'+site+' '+t),'_blank');
-    toast('Artikel im Shop öffnen, dann Link kopieren und hier «+ Neuer Artikel» wählen.',6000)},
+    window.open(SHOPURL[sup]||('https://'+site),'_blank');
+    if(t){try{navigator.clipboard.writeText(t)}catch(_){}}
+    toast(t?`Shop geöffnet – Suchbegriff «${t}» ist kopiert: im Shop ins Suchfeld einfügen. Danach Artikel-Link kopieren und hier «+ Neuer Artikel».`:'Shop geöffnet – Artikel suchen, Link kopieren und hier «+ Neuer Artikel» wählen.',8000)},
   delArt:async id=>{const x=S.articles.find(z=>z.id===id);if(!x||!confirm(`«${x.name}» aus «Meine Artikel» entfernen?\n(Bereits erfasste Mengen in Einträgen bleiben erhalten.)`))return;
     S.articles=S.articles.filter(z=>z.id!==id);await dbDel('articles',id);renderExport()},
   rmMat:async i=>{const p=pinById(UI.pin),e=curEntry(p);if(!e)return;const m=e.mats[+i];if(!m||!confirm(`«${m.name}» entfernen?`))return;e.mats.splice(+i,1);await dbPut('pins',p);renderPinPanel()},
