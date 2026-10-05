@@ -92,6 +92,8 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .bt th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);padding:9px 8px;border-bottom:1px solid var(--line);background:#faf9f6}
 .bt td{padding:5px 8px;border-bottom:1px solid #f0ede7;vertical-align:middle}
 .bt tr.hl td{background:var(--acc2)}
+.bt input.auto{background:#fef9c3!important;border-color:#eab308!important}
+.bt .ra{display:flex;gap:4px}
 .bt input,.bt select{width:100%;border:1px solid transparent;background:transparent;padding:5px 6px;border-radius:5px}
 .bt input:hover,.bt select:hover,.bt input:focus{border-color:var(--line);background:#fff;outline:none}
 .r{text-align:right}
@@ -349,7 +351,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='9 (05.10.2026)';
+const APP_VERSION='10 (05.10.2026)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 const GEWERKE=['Holzbau','Sanitär','Elektro','Fliesen','Gipser','Maler'];
 const GWC={Holzbau:'#92400e',Sanitär:'#2563eb',Elektro:'#ca8a04',Fliesen:'#0d9488',Gipser:'#6b7280',Maler:'#9333ea'};
@@ -462,6 +464,66 @@ function loadPdfLib(base){return new Promise((res,rej)=>{const s=document.create
   s.onerror=()=>{s.remove();rej(new Error('nicht gefunden'))};document.head.appendChild(s)})}
 function pdfjs(){if(!pdfjsP)pdfjsP=loadPdfLib('./').catch(()=>loadPdfLib('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/'))
   .catch(()=>{pdfjsP=null;throw new Error('PDF-Funktion nicht verfügbar – bitte einmal mit Internetverbindung öffnen.')});return pdfjsP}
+/* ---------- Belegerkennung (Gesamtbetrag, Datum, Lieferant) ---------- */
+/* Belegerkennung: Gesamtbetrag, Datum, Lieferant aus Text (PDF-Text oder OCR) */
+const KNOWN_SUPPLIERS=['Bauhaus','Elektrobedarf Troller','Troller','Hornbach','Jumbo','OBI','Coop Bau+Hobby','Bau+Hobby','Landi','Balteschwiler','Kuratle','Gasser','Immer AG','Hilti','Würth','Wuerth','Debrunner','Sanitas Troesch','Richner','Brico','Toom','Migros','Do it','Elektro Material','EM Elektro','Otto Fischer','Winterhalter','Sika','Volg'];
+function parseReceipt(text){
+  const raw=String(text||'').replace(/\r/g,'');
+  const lines=raw.split('\n').map(l=>l.replace(/\s+/g,' ').trim()).filter(Boolean);
+  const amtRe=/(?:CHF|Fr\.?|SFr\.?)?\s*(-?\d{1,3}(?:[''’ ]\d{3})+|-?\d+)[.,](\d{2})(?!\d)/gi;
+  const amounts=l=>{const r=[];let m;amtRe.lastIndex=0;while((m=amtRe.exec(l))){const v=parseFloat(m[1].replace(/[''’ ]/g,'')+'.'+m[2]);if(!isNaN(v))r.push(v)}return r};
+  const KW=/(total|gesamt|endbetrag|rechnungsbetrag|zu bezahlen|zahlbetrag|zahlungsbetrag|betrag|summe|bar|karte|twint|zu zahlen|zahlen)/i;
+  let best=null;
+  lines.forEach((l,i)=>{
+    const low=l.toLowerCase();if(!KW.test(low))return;
+    let am=amounts(l);
+    if(!am.length&&lines[i+1])am=amounts(lines[i+1]);
+    if(!am.length)return;
+    let sc=1;
+    if(/total|gesamt|endbetrag|rechnungsbetrag/.test(low))sc+=3;
+    if(/zu bezahlen|zahlbetrag|zahlungsbetrag|zu zahlen|total chf|totalbetrag/.test(low))sc+=4;
+    if(/inkl/.test(low))sc+=2;
+    if(/exkl|ohne mwst|netto|zwischen|subtotal|sub-total|mwst[ -]?betrag|mwst\s+\d|rabatt|skonto|rückgeld|rueckgeld|retour|gegeben|erhalten|anzahlung/.test(low))sc-=5;
+    if(/^mwst|mwst.*%|\d+[.,]\d\s*%/.test(low))sc-=4;
+    const v=Math.max(...am);
+    if(v<=0)return;
+    if(!best||sc>best.sc||(sc===best.sc&&v>best.v))best={sc,v,line:l};
+  });
+  let amount=best&&best.sc>0?best.v:null;
+  if(amount==null){const all=lines.flatMap(amounts).filter(v=>v>0&&v<200000);if(all.length)amount=Math.max(...all)}
+  // Datum
+  let date=null;const dre=/(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4})/;
+  const dl=lines.find(l=>/datum|date|rechnungsdatum/i.test(l)&&dre.test(l))||lines.find(l=>dre.test(l));
+  if(dl){const m=dl.match(dre);let [_,d,mo,y]=m;y=+y;if(y<100)y+=2000;d=+d;mo=+mo;if(d>=1&&d<=31&&mo>=1&&mo<=12&&y>=2000&&y<=2100)date=`${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`}
+  // Lieferant
+  let supplier=null;const lt=raw.toLowerCase();
+  for(const s of KNOWN_SUPPLIERS){if(lt.includes(s.toLowerCase())){supplier=s==='Troller'?'Elektrobedarf Troller':s==='Wuerth'?'Würth':s;break}}
+  if(!supplier){const c=lines.slice(0,6).find(l=>/[a-zäöü]{3}/i.test(l)&&!/rechnung|quittung|beleg|kassenbon|lieferschein|seite|page|datum|nr\.?|www\.|@|tel|^\d/i.test(l)&&l.length<=40);if(c)supplier=c.replace(/[^\wäöüÄÖÜ&+.,' -]/g,'').trim()||null}
+  return {amount,date,supplier,line:best?best.line:null};
+}
+
+let tessP=null,ocrWorker=null;
+function tesseractLib(){if(!tessP)tessP=new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+  s.onload=()=>window.Tesseract?res(window.Tesseract):rej(new Error('Texterkennung nicht verfügbar'));s.onerror=()=>{tessP=null;s.remove();rej(new Error('Texterkennung braucht beim ersten Mal eine Internetverbindung.'))};document.head.appendChild(s)});return tessP}
+async function ocrImage(blob){const T=await tesseractLib();if(!ocrWorker)ocrWorker=await T.createWorker('deu');const r=await ocrWorker.recognize(blob);return (r&&r.data&&r.data.text)||''}
+async function pdfText(blob){const doc=await openPdf(blob);let out=[];
+  for(let i=1;i<=Math.min(doc.numPages,3);i++){const pg=await doc.getPage(i);const c=await pg.getTextContent();const rows=[];
+    for(const it of c.items){if(!it.str||!it.str.trim())continue;const y=it.transform[5],x=it.transform[4];let r=rows.find(r=>Math.abs(r.y-y)<3);if(!r){r={y,items:[]};rows.push(r)}r.items.push({x,s:it.str})}
+    rows.sort((a,b)=>b.y-a.y);for(const r of rows)out.push(r.items.sort((a,b)=>a.x-b.x).map(i=>i.s).join(' '))}
+  return out.join('\n')}
+async function recognizeBeleg(b,quiet){
+  const file=blobMap.get(b.fileId),prev=blobMap.get(b.previewId);if(!file||!file.blob){if(!quiet)toast('Beleg ist noch nicht auf dieses Gerät geladen.');return false}
+  let text='';
+  try{if(file.mime==='application/pdf'){text=await pdfText(file.blob);if(text.replace(/\s/g,'').length<40&&prev&&prev.blob){toast(`B-${pad(b.nr)}: gescanntes PDF – Texterkennung läuft …`,60000);text=await ocrImage(prev.blob)}}
+    else{toast(`B-${pad(b.nr)}: Texterkennung läuft … (beim ersten Mal ca. 10–20 s)`,60000);text=await ocrImage(file.blob)}}
+  catch(e){console.warn(e);toast('Automatisches Lesen nicht möglich: '+e.message,6000);return false}
+  const r=parseReceipt(text);b.auto=b.auto||{};const got=[];
+  if(r.amount!=null&&(b.amount===''||b.amount==null||b.auto.amount)){b.amount=Math.round(r.amount*100)/100;b.auto.amount=true;got.push('CHF '+chf(b.amount))}
+  if(r.date&&(b.dateAuto||b.auto.date)){b.date=r.date;b.dateAuto=false;b.auto.date=true;got.push(fmtDate(r.date))}
+  if(r.supplier&&(!b.supplier||b.auto.supplier)){b.supplier=r.supplier;b.auto.supplier=true;got.push(r.supplier)}
+  await dbPut('belege',b);
+  toast(got.length?`B-${pad(b.nr)} erkannt: ${got.join(' · ')} – bitte kurz kontrollieren (gelb markiert)`:`B-${pad(b.nr)}: kein Betrag gefunden – bitte von Hand eintragen`,got.length?6000:5000);
+  return got.length>0}
 async function openPdf(blob){const lib=await pdfjs();return await lib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise}
 async function renderPdfPage(doc,n,maxPx){const p=await doc.getPage(n);const v0=p.getViewport({scale:1});const v=p.getViewport({scale:maxPx/Math.max(v0.width,v0.height)});
   const c=document.createElement('canvas');c.width=Math.round(v.width);c.height=Math.round(v.height);const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);
@@ -591,14 +653,14 @@ function renderBelege(){
     ${list.length?`<div class="tw"><table class="bt"><thead><tr><th></th><th>Nr.</th><th style="width:140px">Datum</th><th>Lieferant / Firma</th><th>Beschreibung</th><th style="width:140px">Kategorie</th><th style="width:120px">Gewerk</th><th class="r" style="width:110px">Betrag CHF</th><th style="width:190px">Pins</th><th></th></tr></thead><tbody>
     ${list.map(b=>{const pins=S.pins.filter(p=>pinBelegIds(p).includes(b.id));
       return `<tr data-id="${b.id}" class="${UI.hl===b.id?'hl':''}"><td><div class="bth" data-act="openBeleg" data-id="${b.id}" title="Beleg öffnen">${b.previewId?`<img src="${urlOf(b.previewId)}" alt="">`:''}${isPdfBeleg(b)?'<span class="tag">PDF</span>':''}</div></td>
-      <td class="mut" style="white-space:nowrap">B-${pad(b.nr)}</td><td><input type="date" data-bf="date" value="${esc(b.date)}"></td>
-      <td><input data-bf="supplier" value="${esc(b.supplier)}" placeholder="Lieferant"></td><td><input data-bf="desc" value="${esc(b.desc)}"></td>
+      <td class="mut" style="white-space:nowrap">B-${pad(b.nr)}</td><td><input type="date" data-bf="date" class="${b.auto&&b.auto.date?'auto':''}" value="${esc(b.date)}"></td>
+      <td><input data-bf="supplier" class="${b.auto&&b.auto.supplier?'auto':''}" value="${esc(b.supplier)}" placeholder="Lieferant"></td><td><input data-bf="desc" value="${esc(b.desc)}"></td>
       <td><select data-bf="category">${CATS.map(c=>`<option ${b.category===c?'selected':''}>${c}</option>`).join('')}</select></td>
       <td><select data-bf="gewerk"><option value="">–</option>${GEWERKE.map(g=>`<option ${b.gewerk===g?'selected':''}>${g}</option>`).join('')}</select></td>
-      <td><input class="r" data-bf="amount" inputmode="decimal" value="${b.amount===''||b.amount==null?'':chf(b.amount)}" placeholder="0.00"></td>
+      <td><input class="r ${b.auto&&b.auto.amount?'auto':''}" data-bf="amount" inputmode="decimal" value="${b.amount===''||b.amount==null?'':chf(b.amount)}" placeholder="0.00"></td>
       <td>${pins.map(p=>`<a class="pb" data-act="gotoPin" data-id="${p.id}" data-b="${b.id}" title="${esc(p.title)}">${esc(fn(p.floorId))} ${p.nr}</a>`).join(' ')}
         ${S.pins.length>pins.length?`<select class="lp" data-ch="linkPin"><option value="">+ Pin zuordnen …</option>${orderedFloors().map(f=>{const ps=pinsOf(f.id).filter(p=>!pinBelegIds(p).includes(b.id));return ps.length?`<optgroup label="${esc(floorLabel(f))}">${ps.map(p=>`<option value="${p.id}">${p.nr}${p.title?' – '+esc(p.title):''}</option>`).join('')}</optgroup>`:''}).join('')}</select>`:''}</td>
-      <td><button class="b d sm" data-act="delBeleg" data-id="${b.id}" title="Beleg löschen">×</button></td></tr>`}).join('')}</tbody></table></div>`
+      <td><div class="ra"><button class="b sm" data-act="readBeleg" data-id="${b.id}" title="Betrag, Datum und Lieferant automatisch erkennen">✨</button><button class="b d sm" data-act="delBeleg" data-id="${b.id}" title="Beleg löschen">×</button></div></td></tr>`}).join('')}</tbody></table></div>`
     :`<p class="mut c">${S.belege.length?'Keine Belege für diesen Filter.':'Noch keine Belege erfasst.'}</p>`}`;
   const d=$('#drop');
   d.ondragover=e=>{e.preventDefault();d.classList.add('over')};d.ondragleave=()=>d.classList.remove('over');
@@ -664,15 +726,16 @@ async function addPinPhotos(files){const p=pinById(UI.pin);const e=curEntry(p);i
     let bl;try{bl=await compressImage(f,1800,.8)}catch(e){toast('Dieses Bildformat kann der Browser nicht lesen: '+f.name,6000);continue}
     const r=await storeBlob(bl,'image/jpeg',f.name,hash);e.photoIds.push(r.id);await dbPut('pins',p)}
   toast('Fotos gespeichert');renderPlan()}
-async function addBelege(files){let n=0;
+async function addBelege(files){let n=0;const added=[];
   for(const f of files){if(!(f.type.startsWith('image/')||isPdfFile(f)))continue;toast(`Beleg ${++n} von ${files.length} …`,60000);
     const hash=await hashBlob(f);if(!(await checkDup(f,hash)))continue;
     let fileRec,prev=null;
     if(isPdfFile(f)){fileRec=await storeBlob(f,'application/pdf',f.name,hash);try{const doc=await openPdf(f);const img=await renderPdfPage(doc,1,1600);prev=await storeBlob(img,'image/jpeg','vorschau.jpg','',{pages:doc.numPages})}catch(e){console.warn(e)}}
     else{let bl;try{bl=await compressImage(f,2200,.82)}catch(e){toast('Dieses Bildformat kann der Browser nicht lesen: '+f.name,6000);continue}fileRec=await storeBlob(bl,'image/jpeg',f.name,hash);prev=fileRec}
-    const b={id:uid(),nr:Math.max(0,...S.belege.map(x=>x.nr))+1,date:isoDate(new Date(f.lastModified||Date.now())),supplier:'',desc:f.name.replace(/\.[^.]+$/,''),category:'Material',amount:'',by:SES?SES.email:'',fileId:fileRec.id,previewId:prev?prev.id:null};
-    S.belege.push(b);await dbPut('belege',b)}
-  toast(n?'Belege gespeichert – bitte Datum, Lieferant und Betrag ergänzen':'Keine Bilder oder PDFs gefunden',4000);render()}
+    const b={id:uid(),nr:Math.max(0,...S.belege.map(x=>x.nr))+1,date:isoDate(new Date(f.lastModified||Date.now())),supplier:'',desc:f.name.replace(/\.[^.]+$/,''),category:'Material',amount:'',dateAuto:true,by:SES?SES.email:'',fileId:fileRec.id,previewId:prev?prev.id:null};
+    S.belege.push(b);await dbPut('belege',b);added.push(b)}
+  render();if(!added.length){toast('Keine Bilder oder PDFs gefunden',4000);return}
+  for(const b of added){await recognizeBeleg(b,true);if(UI.tab==='belege')renderBelege()}}
 async function moveFloor(dir){const cf=curFloor();if(!cf||isSite(cf))return;const fl=floorsOfBld(cf.buildingId);const i=fl.findIndex(f=>f.id===UI.floor);const j=i+dir;if(i<0||j<0||j>=fl.length)return;
   const a=fl[i],b=fl[j];[a.order,b.order]=[b.order,a.order];await dbPut('floors',a);await dbPut('floors',b);renderPlan()}
 
@@ -764,6 +827,7 @@ const ACT={
     S.belege=S.belege.filter(x=>x.id!==id);await dbDel('belege',id);
     for(const p of S.pins.filter(p=>pinBelegIds(p).includes(id))){for(const e of p.entries){e.belegIds=e.belegIds.filter(x=>x!==id);delete e.belegGw[id]}await dbPut('pins',p)}
     await delBlobIfUnused(b.fileId);await delBlobIfUnused(b.previewId);renderBelege()},
+  readBeleg:async(id,a)=>{const b=belegById(id);if(!b)return;a.disabled=true;b.auto=Object.assign(b.auto||{},{amount:b.amount===''||b.amount==null||(b.auto&&b.auto.amount)});await recognizeBeleg(b);renderBelege()},
   print:()=>doPrint(),
   syncNow:()=>syncNow(true),
   logout:()=>logout(),
@@ -792,7 +856,7 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(d.opt){UI.opts[d.opt]=t.checked;return}
   if(d.bld){const b=bldById(d.bld);if(!b||!t.value.trim())return renderPlan();b.name=t.value.trim();await dbPut('buildings',b);renderFloorList();renderStage();return}
   if(d.pf){S.project[d.pf]=t.value;await dbPut('kv',S.project);if(d.pf==='name')document.querySelectorAll('[data-pf="name"]').forEach(i=>{if(i!==t)i.value=t.value});return}
-  if(d.bf){const b=belegById(t.closest('tr').dataset.id);if(!b)return;
+  if(d.bf){const b=belegById(t.closest('tr').dataset.id);if(!b)return;if(b.auto&&b.auto[d.bf]){b.auto[d.bf]=false;t.classList.remove('auto')}if(d.bf==='date')b.dateAuto=false;
     if(d.bf==='amount'){b.amount=parseAmount(t.value);t.value=b.amount===''?'':chf(b.amount)}
     else if(d.bf==='gewerk'){const old=b.gewerk||'';b.gewerk=t.value;for(const p of S.pins){let ch=false;for(const e of p.entries)if(e.belegIds.includes(b.id)&&(e.belegGw[b.id]||'')===old){e.belegGw[b.id]=b.gewerk;ch=true}if(ch)await dbPut('pins',p)}}
     else b[d.bf]=t.value;
