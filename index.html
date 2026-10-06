@@ -283,18 +283,21 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
   .enr{flex:none;width:7mm;height:7mm;border-radius:50%;background:#c2410c;color:#fff;font-weight:700;font-size:9pt;display:flex;align-items:center;justify-content:center}
   .ed{margin-left:auto;color:#666}
   .entry p{margin:1mm 0 2mm}
-  .pinsec{break-before:page}
+  .pinsec{break-inside:avoid;page-break-inside:avoid;margin-top:9mm;padding-top:1mm}
+  .pinsec h2,.pinsec .ph,.ent-p .edt{break-after:avoid;page-break-after:avoid}
+  .pbel{break-inside:avoid;page-break-inside:avoid}
+  .mt tr{break-inside:avoid;page-break-inside:avoid}
   .ph{font-size:11pt;margin:5mm 0 2mm;border-bottom:.5pt solid #ccc;padding-bottom:1mm}
   .ptot{margin-top:4mm;padding:2.5mm 3mm;background:#f6f3ee;border-left:1.2mm solid #c2410c;font-weight:700}
-  .ent-p{margin:1mm 0 4mm 9mm;border-left:.8pt solid #ddd;padding-left:3mm;break-inside:auto}
+  .ent-p{margin:1mm 0 4mm 9mm;border-left:.8pt solid #ddd;padding-left:3mm;break-inside:avoid;page-break-inside:avoid}
   .ent-p .edt{font-weight:700;color:#c2410c;margin-bottom:1mm}
   .mt{width:100%;border-collapse:collapse;font-size:9pt;margin:1mm 0 2mm}
   .mt th,.mt td{border-bottom:.3pt solid #ccc;padding:1mm 1.5mm;text-align:left;vertical-align:top}
   .mt .r{text-align:right;white-space:nowrap}
   .mt .tot td{font-weight:700;border-top:.8pt solid #333;border-bottom:0}
   .msum{break-before:page}
-  .eph{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-top:2mm}
-  .eph img{width:100%;max-height:85mm;object-fit:contain;background:#f3f3f3;break-inside:avoid}
+  .eph{display:grid;grid-template-columns:repeat(4,1fr);gap:2mm;margin-top:2mm}
+  .eph img{width:100%;height:34mm;object-fit:cover;background:#f3f3f3;border-radius:1mm;break-inside:avoid}
   .blist table{width:100%;border-collapse:collapse;font-size:9.5pt}
   .blist th{text-align:left;border-bottom:1pt solid #333;padding:1.5mm}
   .blist td{border-bottom:.3pt solid #ccc;padding:1.5mm;vertical-align:top}
@@ -358,7 +361,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='11 (05.10.2026)';
+const APP_VERSION='12 (05.10.2026)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 const GEWERKE=['Holzbau','Sanitär','Elektro','Fliesen','Gipser','Maler'];
 const GWC={Holzbau:'#92400e',Sanitär:'#2563eb',Elektro:'#ca8a04',Fliesen:'#0d9488',Gipser:'#6b7280',Maler:'#9333ea'};
@@ -386,7 +389,10 @@ const rawDel=(s,id)=>tx(s,'readwrite',st=>st.delete(id));
 /* Jede Änderung wird lokal gespeichert UND für die Cloud vorgemerkt */
 const SYNC_KIND={articles:'article',buildings:'building',floors:'floor',pins:'pin',belege:'beleg',kv:'project',blobs:'blob'};
 const STORE_OF={article:'articles',building:'buildings',floor:'floors',pin:'pins',beleg:'belege',project:'kv',blob:'blobs'};
-async function enqueue(store,id,op){if(!cloudOn())return;await tx('queue','readwrite',st=>st.put({id:store+'|'+id,store,recId:id,op,t:Date.now()+Math.random()}));scheduleSync()}
+/* Lokal gerade bearbeitete Datensätze: werden vom Cloud-Abgleich nicht überschrieben, sondern zuerst hochgeladen */
+const TOUCH=new Map();const touch=(store,id)=>TOUCH.set(store+'|'+id,Date.now());
+const recentlyTouched=k=>(TOUCH.get(k)||0)>Date.now()-20000;
+async function enqueue(store,id,op){touch(store,id);if(!cloudOn())return;await tx('queue','readwrite',st=>st.put({id:store+'|'+id,store,recId:id,op,t:Date.now()+Math.random()}));scheduleSync()}
 async function dbPut(s,v){await rawPut(s,v);if(SYNC_KIND[s]&&!(s==='kv'&&v.id!=='project'))await enqueue(s,v.id,'put')}
 async function dbDel(s,id){await rawDel(s,id);if(SYNC_KIND[s])await enqueue(s,id,'del')}
 const dbClear=s=>tx(s,'readwrite',st=>st.clear());
@@ -738,10 +744,10 @@ async function uploadPlan(file){const f=curFloor();if(!f||!file)return;toast('Gr
   catch(e){console.error(e);toast('Fehler: '+e.message,6000)}}
 async function checkDup(file,hash){const dup=S.blobs.find(x=>x.hash&&x.hash===hash);if(!dup)return true;const w=whereUsed(dup.id);
   return confirm(`«${file.name}» ist bereits vorhanden${w?' ('+w+')':''}.\nTrotzdem nochmals hinzufügen?`)}
-async function addPinPhotos(files){const p=pinById(UI.pin);const e=curEntry(p);if(!e)return;let n=0;
+async function addPinPhotos(files){const p0=pinById(UI.pin),e0=curEntry(p0);if(!e0)return;const pid=p0.id,eid=e0.id;touch('pins',pid);let n=0;
   for(const f of files){toast(`Foto ${++n} von ${files.length} …`,60000);const hash=await hashBlob(f);if(!(await checkDup(f,hash)))continue;
     let bl;try{bl=await compressImage(f,1800,.8)}catch(e){toast('Dieses Bildformat kann der Browser nicht lesen: '+f.name,6000);continue}
-    const r=await storeBlob(bl,'image/jpeg',f.name,hash);e.photoIds.push(r.id);await dbPut('pins',p)}
+    const r=await storeBlob(bl,'image/jpeg',f.name,hash);const p=pinById(pid),e=p&&p.entries.find(x=>x.id===eid);if(!e){toast('Eintrag wurde inzwischen gelöscht – Foto nicht zugeordnet.',5000);continue}e.photoIds.push(r.id);touch('pins',pid);await dbPut('pins',p)}
   toast('Fotos gespeichert');renderPlan()}
 async function addBelege(files){let n=0;const added=[];
   for(const f of files){if(!(f.type.startsWith('image/')||isPdfFile(f)))continue;toast(`Beleg ${++n} von ${files.length} …`,60000);
@@ -882,12 +888,12 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
 const saveTimers={};
 document.addEventListener('toggle',e=>{const d=e.target;if(d.tagName==='DETAILS'&&d.dataset&&d.dataset.gw!==undefined){if(d.open)UI.gwOpen.add(d.dataset.gw);else UI.gwOpen.delete(d.dataset.gw)}},true);
 document.addEventListener('input',e=>{const t=e.target;
-  if(t.dataset.mn!==undefined){const p=pinById(UI.pin),en=curEntry(p);if(!en)return;const m=en.mats[+t.dataset.mn];if(!m)return;m.note=t.value;clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);return}
+  if(t.dataset.mn!==undefined){const p=pinById(UI.pin),en=curEntry(p);if(!en)return;touch('pins',p.id);const m=en.mats[+t.dataset.mn];if(!m)return;m.note=t.value;clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);return}
   if(t.dataset.katq!==undefined){const r=t.nextElementSibling;if(r)r.innerHTML=katSearch(t.value,t.dataset.gw||'Holzbau');return}
   if(t.id==='na-url'){const n=$('#na-name');if(n&&!n.value.trim()){const seg=decodeURIComponent((t.value.split('?')[0].replace(/\/+$/,'').split('/').pop()||'')).replace(/\.html?$/,'');
       if(seg){const parts=seg.split('--');let nm=parts[0].replace(/[-_]+/g,' ').trim();nm=nm.charAt(0).toUpperCase()+nm.slice(1);n.value=nm;const c=$('#na-code');if(c&&parts[1]&&!c.value)c.value=parts[1].toUpperCase()}}return}
-  if(t.dataset.gwt!==undefined||t.dataset.ef){const p=pinById(UI.pin),en=curEntry(p);if(!en)return;if(t.dataset.ef)en[t.dataset.ef]=t.value;else en.gwText[t.dataset.gwt]=t.value;clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);return}
-  if(!t.dataset.f)return;const p=pinById(UI.pin);if(!p)return;p[t.dataset.f]=t.value;
+  if(t.dataset.gwt!==undefined||t.dataset.ef){const p=pinById(UI.pin),en=curEntry(p);if(!en)return;touch('pins',p.id);if(t.dataset.ef)en[t.dataset.ef]=t.value;else en.gwText[t.dataset.gwt]=t.value;clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);return}
+  if(!t.dataset.f)return;const p=pinById(UI.pin);if(!p)return;touch('pins',p.id);p[t.dataset.f]=t.value;
   clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);
   if(t.dataset.f==='title'){const el=document.querySelector(`.pin[data-pin="${p.id}"]`);if(el)el.title=t.value}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#lb').hidden)$('#lb').hidden=true;else if(UI.draw){UI.draw=null;renderPlan()}else if(UI.add){UI.add=false;renderStage()}}});
@@ -902,7 +908,7 @@ $('#stage').addEventListener('pointerdown',e=>{
     const mv=ev=>{if(!moved&&Math.hypot(ev.clientX-sx,ev.clientY-sy)<4)return;moved=true;pinEl.style.cursor='grabbing';
       p.x=clamp((ev.clientX-r.left)/r.width);p.y=clamp((ev.clientY-r.top)/r.height);pinEl.style.left=p.x*100+'%';pinEl.style.top=p.y*100+'%'};
     const up=async()=>{pinEl.removeEventListener('pointermove',mv);pinEl.removeEventListener('pointerup',up);pinEl.removeEventListener('pointercancel',up);
-      if(moved)await dbPut('pins',p);UI.pin=p.id;renderStage();renderPinPanel()};
+      if(moved)await dbPut('pins',p);if(!moved&&(UI.pin!==p.id||UI.entry==='none'))UI.entry=null;UI.pin=p.id;renderStage();renderPinPanel()};
     pinEl.addEventListener('pointermove',mv);pinEl.addEventListener('pointerup',up);pinEl.addEventListener('pointercancel',up);return}
   /* Plan: 1 Finger = verschieben bzw. Pin setzen (Tippen), 2 Finger = zoomen */
   e.preventDefault();ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
@@ -964,11 +970,11 @@ async function doPrint(){
         ${e.note?`<p>${nl2br(e.note)}</p>`:''}${e.material?`<p><i>Material:</i> ${nl2br(e.material)}</p>`:''}
         ${GEWERKE.map(g=>{const t=e.gwText[g]||'',ms=matsOf(e,g).map(x=>x[0]);if(!t&&!ms.length)return '';return `${t?`<p><b>${g}:</b> ${nl2br(t)}</p>`:`<p><b>${g}-Material:</b></p>`}${ms.length?matTable(ms):''}`}).join('')}
         ${e.photoIds.length?`<div class="eph">${e.photoIds.map(id=>`<img src="${urlOf(id)}" alt="">`).join('')}</div>`:''}</div>`).join('')||'<p style="color:#666">Keine Einträge.</p>'}
-      <h3 class="ph">Belege</h3>
+      <div class="pbel"><h3 class="ph">Belege</h3>
       ${pb.length?`<table class="mt"><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Gewerk</th><th class="r">Beleg CHF</th><th class="r">Anteil Pin CHF</th></tr></thead><tbody>
         ${pb.map(b=>{const n=belegShares(b).size;return `<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.gewerk||'')}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td><td class="r">${chf(shareOf(b,p.id))}${n>1?`<br><small style="color:#666">aufgeteilt auf ${n} Pins</small>`:''}</td></tr>`}).join('')}
         <tr class="tot"><td colspan="6">Total Belege Pin ${p.nr}</td><td class="r">${chf(bSum)}</td></tr></tbody></table>`:'<p style="color:#666">Keine Belege zugeordnet.</p>'}
-      <div class="ptot">Kosten Pin ${p.nr}: Belege CHF ${chf(bSum)}${mSum?` · Holzbau-Material CHF ${chf(mSum)} · Total CHF ${chf(bSum+mSum)}`:''}</div></section>`}}
+      <div class="ptot">Kosten Pin ${p.nr}: Belege CHF ${chf(bSum)}${mSum?` · Holzbau-Material CHF ${chf(mSum)} · Total CHF ${chf(bSum+mSum)}`:''}</div></div></section>`}}
   if(o.entries){const rows=[];let tb=0,tm=0;
     for(const f of fl)for(const p of pinsOf(f.id).filter(p=>p.entries.some(eOk))){const bS=belegeSorted().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||b.gewerk===G)).reduce((x,b)=>x+shareOf(b,p.id),0),mS=matTotal(entriesOf(p).filter(eOk).flatMap(e=>e.mats));tb+=bS;tm+=mS;rows.push(`<tr><td>${esc(floorLabel(f))}</td><td>${p.nr} ${esc(p.title||'')}</td><td class="r">${chf(bS)}</td><td class="r">${mS?chf(mS):''}</td><td class="r">${chf(bS+mS)}</td></tr>`)}
     const ohne=belegeSorted().filter(b=>(!G||b.gewerk===G)&&!S.pins.some(p=>pinBelegIds(p).includes(b.id)));const to=ohne.reduce((x,b)=>x+(+b.amount||0),0);
@@ -1082,11 +1088,11 @@ async function applyRemote(r,pending){
   if(i>=0)arr[i]=d;else arr.push(d);await rawPut(store,d);return true}
 async function pull(){
   const since=SYNCMETA.lastPull?new Date(new Date(SYNCMETA.lastPull).getTime()-60000).toISOString():null;
-  const pending=new Set((await dbAll('queue')).map(e=>e.id));let off=0,maxT=SYNCMETA.lastPull,changed=false;
+  const pending=new Set((await dbAll('queue')).map(e=>e.id));let off=0,maxT=SYNCMETA.lastPull,changed=false,skipMin=null;
   for(;;){const rows=await (await api(`/rest/v1/items?select=id,kind,data,deleted,updated_at${since?'&updated_at=gt.'+encodeURIComponent(since):''}&order=updated_at.asc,id.asc&limit=1000&offset=${off}`)).json();
-    for(const r of rows){if(!maxT||new Date(r.updated_at)>new Date(maxT))maxT=r.updated_at;if(await applyRemote(r,pending))changed=true}
+    for(const r of rows){if(!maxT||new Date(r.updated_at)>new Date(maxT))maxT=r.updated_at;const k=(STORE_OF[r.kind]||'')+'|'+r.id;if(!pending.has(k)&&recentlyTouched(k)){if(!skipMin||new Date(r.updated_at)<new Date(skipMin))skipMin=r.updated_at;continue}if(await applyRemote(r,pending))changed=true}
     if(rows.length<1000)break;off+=1000}
-  SYNCMETA.lastPull=maxT;await rawPut('kv',SYNCMETA);
+  SYNCMETA.lastPull=skipMin?new Date(new Date(skipMin).getTime()-1).toISOString():maxT;await rawPut('kv',SYNCMETA);
   if(changed){if(!curFloor())UI.floor=firstFloorId();softRender()}}
 let dlRunning=false;
 async function downloadMissing(){if(dlRunning)return;dlRunning=true;let n=0,last=Date.now();
