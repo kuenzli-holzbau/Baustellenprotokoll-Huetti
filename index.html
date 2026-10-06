@@ -191,6 +191,8 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .tagb.on{background:var(--c);color:#fff}
 .gwd{display:inline-block;background:var(--c);color:#fff;border-radius:9px;padding:0 7px;font-size:10px;font-weight:600;margin:2px 3px 0 0;line-height:16px}
 .pin.dim{opacity:.18}
+.plbl{position:absolute;left:calc(100% + 4px);top:50%;transform:translateY(-50%);background:rgba(255,255,255,.92);color:#1f2328;border:1px solid rgba(0,0,0,.15);border-radius:4px;padding:1px 5px;font:600 11px/1.3 -apple-system,Helvetica,Arial,sans-serif;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;pointer-events:none;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.pin.on .plbl{transform:translateY(-50%) scale(.77);transform-origin:left center}
 .pin.hit{background:var(--c);transform:scale(1.15)}
 .gfsel{font-weight:600}
 #v-fotos{padding:14px 18px;max-width:1400px;margin:0 auto}
@@ -277,6 +279,7 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
   .pplan{position:relative;margin:0 auto;border:.3pt solid #999}
   .pplan img{display:block;width:100%}
   .pplan .alabel{font-size:8pt;padding:1px 5px}
+  .pplan .plbl{font-size:6.5pt;padding:0 1mm;left:calc(100% + 2px);max-width:35mm;box-shadow:none}
   .pplan .pin{width:20px;height:20px;margin:-10px 0 0 -10px;font-size:9px;line-height:16px;border-width:1.5px;box-shadow:none}
   .entry{margin-bottom:7mm}
   .eh{display:flex;align-items:center;gap:3mm;border-bottom:.3pt solid #bbb;padding-bottom:1.5mm;margin-bottom:2mm;break-after:avoid}
@@ -361,7 +364,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='12 (05.10.2026)';
+const APP_VERSION='13 (06.10.2026)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 const GEWERKE=['Holzbau','Sanitär','Elektro','Fliesen','Gipser','Maler'];
 const GWC={Holzbau:'#92400e',Sanitär:'#2563eb',Elektro:'#ca8a04',Fliesen:'#0d9488',Gipser:'#6b7280',Maler:'#9333ea'};
@@ -399,7 +402,9 @@ const dbClear=s=>tx(s,'readwrite',st=>st.clear());
 
 /* ---------- Zustand ---------- */
 const S={project:{id:'project',name:'Baustellenprotokoll',address:'',author:'',period:''},floors:[],buildings:[],articles:[],pins:[],belege:[],blobs:[]};
-const UI={tab:'plan',floor:null,pin:null,add:false,draw:null,newArt:null,gf:'',pf:'',pfl:'',gwOpen:new Set(),fg:'',zoom:1,fy:'',fc:'',q:'',hl:null,opts:{plans:true,entries:true,mats:true,list:true,att:true,gw:''}};
+const ZOOM0=.5;
+let SHOWLBL=false;try{SHOWLBL=localStorage.getItem('bp_lbl')==='1'}catch(_){}
+const UI={tab:'plan',floor:null,pin:null,add:false,draw:null,newArt:null,gf:'',pf:'',pfl:'',gwOpen:new Set(),fg:'',zoom:ZOOM0,fy:'',fc:'',q:'',hl:null,opts:{plans:true,entries:true,mats:true,list:true,att:true,gw:''}};
 const blobMap=new Map(), urls=new Map();
 const floorById=id=>S.floors.find(f=>f.id===id);
 const pinById=id=>S.pins.find(p=>p.id===id);
@@ -441,6 +446,7 @@ const matTotal=ms=>ms.reduce((s,m)=>s+(+m.qty||0)*(+m.price||0),0);
 const entGewerke=e=>GEWERKE.filter(g=>e.gwText[g]||entBelegeGw(e,g).length||matsOf(e,g).length);
 const entTags=e=>GEWERKE.filter(g=>(e.tags||[]).includes(g)||entGewerke(e).includes(g));
 const pinGewerke=p=>GEWERKE.filter(g=>p.entries.some(e=>entTags(e).includes(g)));
+const pinLbl=p=>SHOWLBL&&p.title?`<span class="plbl">${esc(p.title)}</span>`:'';
 const gwDots=gs=>gs.map(g=>`<span class="gwd" style="--c:${GWC[g]}">${g}</span>`).join('');
 async function linkBeleg(p,e,bid,g){if(!p||!e)return;if(!e.belegIds.includes(bid))e.belegIds.push(bid);e.belegGw[bid]=g||'';await dbPut('pins',p);
   const b=S.belege.find(x=>x.id===bid);if(b&&g&&!b.gewerk){b.gewerk=g;await dbPut('belege',b)}}
@@ -581,6 +587,7 @@ function renderStage(){
     :`${nav}<input class="fname" value="${esc(f.name)}" data-ch="renameFloor" title="Umbenennen">${bsel}
     ${site?'':'<button class="b sm" data-act="up" title="Nach oben">▲</button><button class="b sm" data-act="down" title="Nach unten">▼</button>'}<span class="sp"></span>
     ${f.planId?`<button class="b sm" data-act="zout" title="Verkleinern">−</button><span class="zv">${Math.round(UI.zoom*100)}%</span><button class="b sm" data-act="zin" title="Vergrössern">+</button>
+    <button class="b ${SHOWLBL?'p':''}" data-act="togLbl" title="Pinbezeichnung neben dem Pin ein-/ausblenden">🏷️ ${SHOWLBL?'Namen ausblenden':'Namen einblenden'}</button>
     <button class="b ${UI.add?'p':''}" data-act="addPin">${UI.add?'Jetzt in den Plan klicken … (Esc)':'📍 Pin setzen'}</button>
     ${site?'<button class="b" data-act="markBld">🏠 Gebäude markieren</button>':''}
     <select class="gfsel" data-ch="gf" title="Pins nach Gewerk hervorheben" style="${UI.gf?'color:'+GWC[UI.gf]:''}"><option value="">Alle Gewerke</option>${GEWERKE.map(g=>`<option ${UI.gf===g?'selected':''}>${g}</option>`).join('')}</select>`:''}
@@ -588,7 +595,7 @@ function renderStage(){
     <button class="b d" data-act="delFloor">Löschen</button>`;
   if(!f.planId){st.innerHTML=`<div class="empty"><p>Für «${esc(f.name)}» ist noch kein Plan hinterlegt.</p><button class="b p" data-act="planUp">Plan hochladen (Bild oder PDF)</button></div>`;return}
   const dr=drawing&&UI.draw.pts.length?`<svg class="areas" viewBox="0 0 1000 1000" preserveAspectRatio="none"><polygon class="dr" points="${UI.draw.pts.map(([x,y])=>(x*1000).toFixed(1)+','+(y*1000).toFixed(1)).join(' ')}"/></svg>${UI.draw.pts.map(([x,y])=>`<span class="dot" style="left:${x*100}%;top:${y*100}%"></span>`).join('')}`:'';
-  st.innerHTML=`<div class="plan ${UI.add||drawing?'adding':''}" style="width:${UI.zoom*100}%"><img src="${urlOf(f.planId)}" alt="Plan" draggable="false">${areasHtml(f)}${dr}${pinsOf(f.id).map(p=>{const hit=UI.gf&&pinGewerke(p).includes(UI.gf);return `<div class="pin ${p.id===UI.pin?'on':''} ${UI.gf?(hit?'hit':'dim'):''}" data-pin="${p.id}" style="left:${p.x*100}%;top:${p.y*100}%;${hit?'--c:'+GWC[UI.gf]:''}" title="${esc(p.title)}">${p.nr}</div>`}).join('')}</div>`;
+  st.innerHTML=`<div class="plan ${UI.add||drawing?'adding':''}" style="width:${UI.zoom*100}%"><img src="${urlOf(f.planId)}" alt="Plan" draggable="false">${areasHtml(f)}${dr}${pinsOf(f.id).map(p=>{const hit=UI.gf&&pinGewerke(p).includes(UI.gf);return `<div class="pin ${p.id===UI.pin?'on':''} ${UI.gf?(hit?'hit':'dim'):''}" data-pin="${p.id}" style="left:${p.x*100}%;top:${p.y*100}%;${hit?'--c:'+GWC[UI.gf]:''}" title="${esc(p.title)}">${p.nr}${pinLbl(p)}</div>`}).join('')}</div>`;
 }
 function renderPinPanel(){
   const el=$('#pinPanel'),p=pinById(UI.pin);
@@ -740,7 +747,7 @@ async function uploadPlan(file){const f=curFloor();if(!f||!file)return;toast('Gr
       blob=await renderPdfPage(doc,n,3600)}
     else blob=await compressImage(file,3600,.9);
     const im=await loadBitmap(blob);const rec=await storeBlob(blob,'image/jpeg',file.name,'',{w:im.width,h:im.height});
-    const old=f.planId;f.planId=rec.id;await dbPut('floors',f);await delBlobIfUnused(old);UI.zoom=1;renderPlan();toast('Grundriss gespeichert')}
+    const old=f.planId;f.planId=rec.id;await dbPut('floors',f);await delBlobIfUnused(old);UI.zoom=ZOOM0;renderPlan();toast('Grundriss gespeichert')}
   catch(e){console.error(e);toast('Fehler: '+e.message,6000)}}
 async function checkDup(file,hash){const dup=S.blobs.find(x=>x.hash&&x.hash===hash);if(!dup)return true;const w=whereUsed(dup.id);
   return confirm(`«${file.name}» ist bereits vorhanden${w?' ('+w+')':''}.\nTrotzdem nochmals hinzufügen?`)}
@@ -772,10 +779,10 @@ const ACT={
   addFloor:async id=>{const cf=curFloor();const bid=id===undefined?((cf&&!isSite(cf)&&cf.buildingId)||null):(id||null);const bn=bid?bldById(bid)?.name:'';
     const name=prompt(`Name des Geschosses${bn?' in «'+bn+'»':''} (z.B. UG, EG, 1. OG, DG):`);if(!name||!name.trim())return;
     const f={id:uid(),name:name.trim(),order:Math.max(0,...S.floors.map(x=>x.order))+1,planId:null,buildingId:bid};S.floors.push(f);await dbPut('floors',f);UI.floor=f.id;UI.pin=null;UI.add=false;renderPlan()},
-  selFloor:id=>{UI.floor=id;UI.pin=null;UI.add=false;UI.draw=null;UI.zoom=1;renderPlan()},
+  selFloor:id=>{UI.floor=id;UI.pin=null;UI.add=false;UI.draw=null;UI.zoom=ZOOM0;renderPlan()},
   toSite:()=>{const s=siteFloor();if(s)ACT.selFloor(s.id)},
   addSite:async()=>{let s=siteFloor();if(s)return ACT.selFloor(s.id);
-    s={id:uid(),name:'Situationsplan',kind:'site',order:-1,planId:null,buildingId:null};S.floors.push(s);UI.floor=s.id;UI.pin=null;UI.add=false;UI.draw=null;UI.zoom=1;
+    s={id:uid(),name:'Situationsplan',kind:'site',order:-1,planId:null,buildingId:null};S.floors.push(s);UI.floor=s.id;UI.pin=null;UI.add=false;UI.draw=null;UI.zoom=ZOOM0;
     $('#planInput').click();await dbPut('floors',s);renderPlan()},
   openBld:async id=>{const b=bldById(id);if(!b)return;const fl=floorsOfBld(id);
     if(fl.length)return ACT.selFloor(fl[0].id);
@@ -808,9 +815,10 @@ const ACT={
     UI.floor=firstFloorId();UI.pin=null;renderPlan()},
   selPin:id=>{UI.pin=id;UI.entry=null;renderPlan()},
   selEntry:id=>{UI.entry=id;renderPinPanel()},
+  togLbl:()=>{SHOWLBL=!SHOWLBL;try{localStorage.setItem('bp_lbl',SHOWLBL?'1':'0')}catch(_){}renderStage()},
   togTag:async g=>{const p=pinById(UI.pin),e=curEntry(p);if(!e)return;e.tags=e.tags||[];e.tags=e.tags.includes(g)?e.tags.filter(x=>x!==g):[...e.tags,g];await dbPut('pins',p);renderPinPanel();renderStage()},
   pfSet:g=>{UI.pf=g||'';renderFotos()},
-  gotoEntry:(id,a)=>{const p=pinById(id);if(!p)return;UI.tab='plan';UI.floor=p.floorId;UI.pin=id;UI.entry=a.dataset.e||null;UI.zoom=1;render()},
+  gotoEntry:(id,a)=>{const p=pinById(id);if(!p)return;UI.tab='plan';UI.floor=p.floorId;UI.pin=id;UI.entry=a.dataset.e||null;UI.zoom=ZOOM0;render()},
   doneEntry:async()=>{const p=pinById(UI.pin);if(!p)return;clearTimeout(saveTimers[p.id]);delete saveTimers[p.id];await dbPut('pins',p);UI.entry='none';renderPlan();
     toast(cloudOn()&&SES?'✓ Eintrag gespeichert – wird synchronisiert':'✓ Eintrag gespeichert')},
   newEntry:async()=>{const p=pinById(UI.pin);if(!p)return;const e=newEntry();p.entries.push(e);UI.entry=e.id;await dbPut('pins',p);renderPlan();const t=document.querySelector('[data-ef="note"]');if(t)t.focus()},
@@ -844,7 +852,7 @@ const ACT={
   delPin:async()=>{const p=pinById(UI.pin);if(!confirm(`Pin ${p.nr} mit ${p.entries.length} Eintrag/Einträgen und ${pinPhotos(p).length} Foto(s) löschen?`))return;
     S.pins=S.pins.filter(x=>x.id!==p.id);await dbDel('pins',p.id);for(const id of pinPhotos(p))await delBlobIfUnused(id);UI.pin=null;UI.entry=null;renderPlan()},
   gotoBeleg:id=>{UI.tab='belege';UI.fy=UI.fc=UI.q='';UI.hl=id;render()},
-  gotoPin:(id,a)=>{const p=pinById(id);if(!p)return;const e=a&&a.dataset.b?entryWithBeleg(p,a.dataset.b):null;UI.tab='plan';UI.floor=p.floorId;UI.pin=id;UI.entry=e?e.id:null;UI.zoom=1;render()},
+  gotoPin:(id,a)=>{const p=pinById(id);if(!p)return;const e=a&&a.dataset.b?entryWithBeleg(p,a.dataset.b):null;UI.tab='plan';UI.floor=p.floorId;UI.pin=id;UI.entry=e?e.id:null;UI.zoom=ZOOM0;render()},
   openBeleg:id=>{const b=belegById(id);if(!b)return;if(isPdfBeleg(b)){const w=window.open(urlOf(b.fileId),'_blank');if(!w&&b.previewId)showImg(b.previewId)}else showImg(b.fileId)},
   delBeleg:async id=>{const b=belegById(id);if(!confirm(`Beleg B-${pad(b.nr)} löschen?`))return;
     S.belege=S.belege.filter(x=>x.id!==id);await dbDel('belege',id);
@@ -960,7 +968,7 @@ async function doPrint(){
   const G=o.gw,eOk=e=>!G||entTags(e).includes(G);
   for(const f of fl){const pins=pinsOf(f.id).filter(p=>p.entries.some(eOk));if(G&&!pins.length)continue;
     if(o.plans&&f.planId){const b=blobMap.get(f.planId)||{};const w=b.w||1,hh=b.h||1;const wmm=Math.min(184,240*w/hh);
-      h+=`<section class="pg"><h2>${esc(floorLabel(f))}${isSite(f)?'':' – Grundriss'}</h2><div class="pplan" style="width:${wmm.toFixed(1)}mm"><img src="${urlOf(f.planId)}" alt="">${areasHtml(f)}${pins.map(p=>`<span class="pin" style="left:${p.x*100}%;top:${p.y*100}%">${p.nr}</span>`).join('')}</div></section>`}
+      h+=`<section class="pg"><h2>${esc(floorLabel(f))}${isSite(f)?'':' – Grundriss'}</h2><div class="pplan" style="width:${wmm.toFixed(1)}mm"><img src="${urlOf(f.planId)}" alt="">${areasHtml(f)}${pins.map(p=>`<span class="pin" style="left:${p.x*100}%;top:${p.y*100}%">${p.nr}${pinLbl(p)}</span>`).join('')}</div></section>`}
     if(o.entries)for(const p of pins){const es=entriesOf(p).filter(eOk);
       const pb=belegeSorted().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||b.gewerk===G));
       const bSum=pb.reduce((x,b)=>x+shareOf(b,p.id),0),mSum=matTotal(es.flatMap(e=>e.mats));
