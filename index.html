@@ -124,6 +124,10 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .fl.site span{font-weight:600}
 .areas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 .areas polygon{fill:rgba(194,65,12,.14);stroke:#c2410c;stroke-width:2.5;vector-effect:non-scaling-stroke}
+.areas.rooms polygon{fill:rgba(13,148,136,.07);stroke:#0d9488;stroke-width:1.8}
+.rlabel{position:absolute;transform:translate(-50%,-50%);color:#0f766e;font:700 12px/1.2 -apple-system,Helvetica,Arial,sans-serif;background:rgba(255,255,255,.75);border-radius:4px;padding:1px 6px;pointer-events:none;white-space:nowrap;z-index:1;text-transform:uppercase;letter-spacing:.03em}
+.rgh{font-size:11px;font-weight:700;color:#0f766e;text-transform:uppercase;letter-spacing:.04em;margin:12px 4px 2px;display:flex;justify-content:space-between}
+.proom{font-size:12px;color:#0f766e;margin:-6px 0 10px;font-weight:600}
 .areas .dr{fill:rgba(37,99,235,.15);stroke:#2563eb;stroke-dasharray:7 5}
 .alabel{position:absolute;transform:translate(-50%,-50%);background:rgba(255,255,255,.93);border:1.5px solid #c2410c;color:#9a3412;border-radius:8px;padding:3px 10px;font-weight:700;font-size:13px;pointer-events:none;text-align:center;white-space:nowrap;z-index:1}
 .alabel small{display:block;font-weight:400;font-size:10px;color:#6b6f76}
@@ -279,6 +283,12 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
   .pplan{position:relative;margin:0 auto;border:.3pt solid #999}
   .pplan img{display:block;width:100%}
   .pplan .alabel{font-size:8pt;padding:1px 5px}
+  .pplan .rlabel{font-size:6.5pt;padding:0 1mm;background:rgba(255,255,255,.8)}
+  .roomh{font-size:16pt;color:#0f766e;border-bottom:2pt solid #0d9488!important;margin:8mm 0 1mm!important;break-after:avoid;page-break-after:avoid}
+  .roomh small{font-size:10pt;color:#666;font-weight:400}
+  .pinsec h2.pinh{font-size:13pt;border-bottom-width:1pt;margin-bottom:2mm!important}
+  .rtot{margin:3mm 0 2mm;padding:2.5mm 3mm;background:#e6f4f1;border-left:1.2mm solid #0d9488;font-weight:700;break-inside:avoid;break-before:avoid}
+  .mt tr.sub td{font-weight:700;background:#f2f8f6}
   .pplan .plbl{font-size:6.5pt;padding:0 1mm;left:calc(100% + 2px);max-width:35mm;box-shadow:none}
   .pplan .pin{width:20px;height:20px;margin:-10px 0 0 -10px;font-size:9px;line-height:16px;border-width:1.5px;box-shadow:none}
   .entry{margin-bottom:7mm}
@@ -286,13 +296,14 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
   .enr{flex:none;width:7mm;height:7mm;border-radius:50%;background:#c2410c;color:#fff;font-weight:700;font-size:9pt;display:flex;align-items:center;justify-content:center}
   .ed{margin-left:auto;color:#666}
   .entry p{margin:1mm 0 2mm}
-  .pinsec{break-inside:avoid;page-break-inside:avoid;margin-top:9mm;padding-top:1mm}
+  .pinsec{break-inside:avoid;page-break-inside:avoid;margin-top:5mm;padding-top:0}
   .pinsec h2,.pinsec .ph,.ent-p .edt{break-after:avoid;page-break-after:avoid}
   .pbel{break-inside:avoid;page-break-inside:avoid}
   .mt tr{break-inside:avoid;page-break-inside:avoid}
-  .ph{font-size:11pt;margin:5mm 0 2mm;border-bottom:.5pt solid #ccc;padding-bottom:1mm}
-  .ptot{margin-top:4mm;padding:2.5mm 3mm;background:#f6f3ee;border-left:1.2mm solid #c2410c;font-weight:700}
-  .ent-p{margin:1mm 0 4mm 9mm;border-left:.8pt solid #ddd;padding-left:3mm;break-inside:avoid;page-break-inside:avoid}
+  .ph{font-size:10.5pt;margin:3mm 0 1.5mm;border-bottom:.5pt solid #ccc;padding-bottom:.8mm}
+  .ptot{margin-top:2.5mm;padding:2mm 3mm;background:#f6f3ee;border-left:1.2mm solid #c2410c;font-weight:700}
+  .ent-p p{margin:.6mm 0 1.2mm}
+  .ent-p{margin:1mm 0 3mm 6mm;border-left:.8pt solid #ddd;padding-left:3mm;break-inside:avoid;page-break-inside:avoid}
   .ent-p .edt{font-weight:700;color:#c2410c;margin-bottom:1mm}
   .mt{width:100%;border-collapse:collapse;font-size:9pt;margin:1mm 0 2mm}
   .mt th,.mt td{border-bottom:.3pt solid #ccc;padding:1mm 1.5mm;text-align:left;vertical-align:top}
@@ -364,7 +375,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='13 (06.10.2026)';
+const APP_VERSION='14 (08.10.2026)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 const GEWERKE=['Holzbau','Sanitär','Elektro','Fliesen','Gipser','Maler'];
 const GWC={Holzbau:'#92400e',Sanitär:'#2563eb',Elektro:'#ca8a04',Fliesen:'#0d9488',Gipser:'#6b7280',Maler:'#9333ea'};
@@ -422,7 +433,18 @@ const firstFloorId=()=>orderedFloors()[0]?.id||null;
 function inPoly(x,y,pts){let c=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const [xi,yi]=pts[i],[xj,yj]=pts[j];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c}return c}
 function centroid(pts){let a=0,cx=0,cy=0;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const f=pts[j][0]*pts[i][1]-pts[i][0]*pts[j][1];a+=f;cx+=(pts[j][0]+pts[i][0])*f;cy+=(pts[j][1]+pts[i][1])*f}
   if(Math.abs(a)<1e-9)return [pts.reduce((s,p)=>s+p[0],0)/pts.length,pts.reduce((s,p)=>s+p[1],0)/pts.length];return [cx/(3*a),cy/(3*a)]}
-function areasHtml(f){if(!isSite(f))return '';const as=bldsSorted().filter(b=>b.area&&b.area.length>2);if(!as.length)return '';
+/* Zimmerflächen: pro Geschoss f.rooms=[{id,name,area:[[x,y],…]}]; Pins werden über ihre Lage automatisch zugeordnet */
+const polyArea=pts=>{let a=0;for(let i=0,j=pts.length-1;i<pts.length;j=i++)a+=(pts[j][0]+pts[i][0])*(pts[j][1]-pts[i][1]);return Math.abs(a/2)};
+const roomsOf=f=>(f&&!isSite(f)&&f.rooms)||[];
+function roomOfPin(p){const f=floorById(p.floorId);let best=null,ba=9;for(const r of roomsOf(f)){if(r.area&&r.area.length>2&&inPoly(p.x,p.y,r.area)){const a=polyArea(r.area);if(a<ba){ba=a;best=r}}}return best}
+function pinGroups(f,pins){const rs=roomsOf(f);if(!rs.length)return [{room:null,pins}];const g=rs.map(r=>({room:r,pins:[]})),none={room:null,pins:[]};
+  for(const p of pins){const r=roomOfPin(p);(r?g.find(x=>x.room.id===r.id):none).pins.push(p)}return [...g,none].filter(x=>x.pins.length||x.room)}
+const rectPts=([[x1,y1],[x2,y2]])=>[[x1,y1],[x2,y1],[x2,y2],[x1,y2]];
+const ptsStr=a=>a.map(([x,y])=>(x*1000).toFixed(1)+','+(y*1000).toFixed(1)).join(' ');
+function areasHtml(f){if(!isSite(f)){const rs=roomsOf(f).filter(r=>r.area&&r.area.length>2);if(!rs.length)return '';
+    return `<svg class="areas rooms" viewBox="0 0 1000 1000" preserveAspectRatio="none">${rs.map(r=>`<polygon points="${ptsStr(r.area)}"/>`).join('')}</svg>`+
+      rs.map(r=>{const c=centroid(r.area);return `<div class="rlabel" style="left:${c[0]*100}%;top:${c[1]*100}%">${esc(r.name)}</div>`}).join('')}
+  const as=bldsSorted().filter(b=>b.area&&b.area.length>2);if(!as.length)return '';
   const pt=a=>a.map(([x,y])=>(x*1000).toFixed(1)+','+(y*1000).toFixed(1)).join(' ');
   return `<svg class="areas" viewBox="0 0 1000 1000" preserveAspectRatio="none">${as.map(b=>`<polygon points="${pt(b.area)}"/>`).join('')}</svg>`+
     as.map(b=>{const c=centroid(b.area);return `<div class="alabel" style="left:${c[0]*100}%;top:${c[1]*100}%">🏠 ${esc(b.name)}<small>${floorsOfBld(b.id).length} Geschoss(e)</small></div>`}).join('')}
@@ -579,22 +601,25 @@ function renderFloorList(){
 function renderStage(){
   const f=curFloor(),bar=$('#planBar'),st=$('#stage');
   if(!f){bar.innerHTML='<span class="mut">Kein Plan ausgewählt</span>';st.innerHTML=`<div class="empty"><h3>Willkommen</h3><p>Beginne mit dem <b>Situationsplan</b>: Darauf umrandest du das Haus und gelangst mit einem Tipp zu dessen Grundrissen. Du kannst auch direkt ein Geschoss anlegen.</p><p><button class="b p" data-act="addSite">+ Situationsplan</button> <button class="b" data-act="addFloor">+ Geschoss</button></p></div>`;return}
-  const site=isSite(f),drawing=site&&UI.draw;
+  const site=isSite(f),drawing=!!UI.draw,isRoom=drawing&&UI.draw.kind==='room';
   const nav=!site&&siteFloor()?`<button class="b sm" data-act="toSite" title="Zurück zum Situationsplan">‹ Situationsplan</button>`:'';
   const bsel=!site&&S.buildings.length?`<select data-ch="floorBld" title="Gehört zu Gebäude"><option value="">Ohne Gebäude</option>${bldsSorted().map(b=>`<option value="${b.id}" ${f.buildingId===b.id?'selected':''}>🏠 ${esc(b.name)}</option>`).join('')}</select>`:'';
-  bar.innerHTML=drawing?`<span class="drawhint">✏️ ${UI.draw.bid?'Neue Fläche für «'+esc(bldById(UI.draw.bid)?.name||'')+'»: ':''}Ecken des Gebäudes nacheinander antippen (${UI.draw.pts.length} Punkte)</span><span class="sp"></span>
-      <button class="b" data-act="drawUndo" ${UI.draw.pts.length?'':'disabled'}>↶ Zurück</button><button class="b p" data-act="drawDone" ${UI.draw.pts.length>2?'':'disabled'}>✓ Fertig</button><button class="b" data-act="drawCancel">Abbrechen</button>`
+  bar.innerHTML=drawing?(isRoom?`<span class="drawhint" style="color:#0f766e">▭ ${UI.draw.rid?'Neue Fläche für «'+esc((roomsOf(f).find(r=>r.id===UI.draw.rid)||{}).name||'')+'»: ':'Zimmer: '}2 gegenüberliegende Ecken (Rechteck) oder alle Ecken antippen (${UI.draw.pts.length} Punkte)</span><span class="sp"></span>
+      <button class="b" data-act="drawUndo" ${UI.draw.pts.length?'':'disabled'}>↶ Zurück</button><button class="b p" data-act="drawDone" ${UI.draw.pts.length>1?'':'disabled'}>✓ Fertig</button><button class="b" data-act="drawCancel">Abbrechen</button>`
+    :`<span class="drawhint">✏️ ${UI.draw.bid?'Neue Fläche für «'+esc(bldById(UI.draw.bid)?.name||'')+'»: ':''}Ecken des Gebäudes nacheinander antippen (${UI.draw.pts.length} Punkte)</span><span class="sp"></span>
+      <button class="b" data-act="drawUndo" ${UI.draw.pts.length?'':'disabled'}>↶ Zurück</button><button class="b p" data-act="drawDone" ${UI.draw.pts.length>2?'':'disabled'}>✓ Fertig</button><button class="b" data-act="drawCancel">Abbrechen</button>`)
     :`${nav}<input class="fname" value="${esc(f.name)}" data-ch="renameFloor" title="Umbenennen">${bsel}
     ${site?'':'<button class="b sm" data-act="up" title="Nach oben">▲</button><button class="b sm" data-act="down" title="Nach unten">▼</button>'}<span class="sp"></span>
     ${f.planId?`<button class="b sm" data-act="zout" title="Verkleinern">−</button><span class="zv">${Math.round(UI.zoom*100)}%</span><button class="b sm" data-act="zin" title="Vergrössern">+</button>
     <button class="b ${SHOWLBL?'p':''}" data-act="togLbl" title="Pinbezeichnung neben dem Pin ein-/ausblenden">🏷️ ${SHOWLBL?'Namen ausblenden':'Namen einblenden'}</button>
     <button class="b ${UI.add?'p':''}" data-act="addPin">${UI.add?'Jetzt in den Plan klicken … (Esc)':'📍 Pin setzen'}</button>
-    ${site?'<button class="b" data-act="markBld">🏠 Gebäude markieren</button>':''}
+    ${site?'<button class="b" data-act="markBld">🏠 Gebäude markieren</button>':'<button class="b" data-act="markRoom">▭ Zimmer zeichnen</button>'}
     <select class="gfsel" data-ch="gf" title="Pins nach Gewerk hervorheben" style="${UI.gf?'color:'+GWC[UI.gf]:''}"><option value="">Alle Gewerke</option>${GEWERKE.map(g=>`<option ${UI.gf===g?'selected':''}>${g}</option>`).join('')}</select>`:''}
     <button class="b" data-act="planUp">${f.planId?'Plan ersetzen':'Plan hochladen'}</button>
     <button class="b d" data-act="delFloor">Löschen</button>`;
   if(!f.planId){st.innerHTML=`<div class="empty"><p>Für «${esc(f.name)}» ist noch kein Plan hinterlegt.</p><button class="b p" data-act="planUp">Plan hochladen (Bild oder PDF)</button></div>`;return}
-  const dr=drawing&&UI.draw.pts.length?`<svg class="areas" viewBox="0 0 1000 1000" preserveAspectRatio="none"><polygon class="dr" points="${UI.draw.pts.map(([x,y])=>(x*1000).toFixed(1)+','+(y*1000).toFixed(1)).join(' ')}"/></svg>${UI.draw.pts.map(([x,y])=>`<span class="dot" style="left:${x*100}%;top:${y*100}%"></span>`).join('')}`:'';
+  const dpts=isRoom&&UI.draw.pts.length===2?rectPts(UI.draw.pts):UI.draw?UI.draw.pts:[];
+  const dr=drawing&&UI.draw.pts.length?`<svg class="areas" viewBox="0 0 1000 1000" preserveAspectRatio="none"><polygon class="dr" points="${ptsStr(dpts)}"/></svg>${UI.draw.pts.map(([x,y])=>`<span class="dot" style="left:${x*100}%;top:${y*100}%"></span>`).join('')}`:'';
   st.innerHTML=`<div class="plan ${UI.add||drawing?'adding':''}" style="width:${UI.zoom*100}%"><img src="${urlOf(f.planId)}" alt="Plan" draggable="false">${areasHtml(f)}${dr}${pinsOf(f.id).map(p=>{const hit=UI.gf&&pinGewerke(p).includes(UI.gf);return `<div class="pin ${p.id===UI.pin?'on':''} ${UI.gf?(hit?'hit':'dim'):''}" data-pin="${p.id}" style="left:${p.x*100}%;top:${p.y*100}%;${hit?'--c:'+GWC[UI.gf]:''}" title="${esc(p.title)}">${p.nr}${pinLbl(p)}</div>`}).join('')}</div>`;
 }
 function renderPinPanel(){
@@ -603,12 +628,16 @@ function renderPinPanel(){
   if(!p||p.floorId!==UI.floor){
     const pins=pinsOf(UI.floor),cf=curFloor();
     const bl=isSite(cf)?`<div class="hd">Gebäude</div>${bldsSorted().map(b=>`<div class="bld"><input data-bld="${b.id}" value="${esc(b.name)}" title="Umbenennen"><small>${floorsOfBld(b.id).length} Geschoss(e)${b.area?'':' · noch keine Fläche'}</small><div class="bact"><button class="b sm" data-act="openBld" data-id="${b.id}">Öffnen</button><button class="b sm" data-act="redraw" data-id="${b.id}">Fläche ${b.area?'neu ':''}zeichnen</button><button class="b sm d" data-act="delBld" data-id="${b.id}">Löschen</button></div></div>`).join('')||'<p class="mut">Noch keine Gebäude. Tippe oben auf «🏠 Gebäude markieren» und dann auf die Ecken des Hauses.</p>'}<div style="height:14px"></div>`:'';
-    el.innerHTML=`${bl}<div class="hd">Einträge ${esc(floorLabel(cf))}</div>${pins.length?pins.map(x=>`<div class="pli" data-act="selPin" data-id="${x.id}"><b>${x.nr}</b><span>${esc(x.title||'(ohne Titel)')}<small>${fmtDate(lastEntry(x).date)} · ${x.entries.length} ${x.entries.length===1?'Eintrag':'Einträge'} · ${pinPhotos(x).length} Foto(s)${pinBelegIds(x).length?' · '+pinBelegIds(x).length+' Beleg(e)':''}${pinGewerke(x).length?'<br>'+gwDots(pinGewerke(x)):''}</small></span></div>`).join(''):'<p class="mut">Noch keine Pins. Klicke oben auf «📍 Pin setzen» und dann auf die Stelle im Grundriss.</p>'}`;
+    const rl=!isSite(cf)&&cf.planId?`<div class="hd">Zimmer</div>${roomsOf(cf).map(r=>`<div class="bld"><input data-room="${r.id}" value="${esc(r.name)}" title="Umbenennen"><small>${pins.filter(p=>roomOfPin(p)===r).length} Pin(s)</small><div class="bact"><button class="b sm" data-act="redrawRoom" data-id="${r.id}">Fläche neu zeichnen</button><button class="b sm d" data-act="delRoom" data-id="${r.id}">Löschen</button></div></div>`).join('')||'<p class="mut" style="font-size:13px">Noch keine Zimmer. Oben «▭ Zimmer zeichnen» – bei Rechtecken genügen 2 Ecken.</p>'}<div style="height:14px"></div>`:'';
+    const pli=x=>`<div class="pli" data-act="selPin" data-id="${x.id}"><b>${x.nr}</b><span>${esc(x.title||'(ohne Titel)')}<small>${fmtDate(lastEntry(x).date)} · ${x.entries.length} ${x.entries.length===1?'Eintrag':'Einträge'} · ${pinPhotos(x).length} Foto(s)${pinBelegIds(x).length?' · '+pinBelegIds(x).length+' Beleg(e)':''}${pinGewerke(x).length?'<br>'+gwDots(pinGewerke(x)):''}</small></span></div>`;
+    const gr=pinGroups(cf,pins);
+    el.innerHTML=`${bl}${rl}<div class="hd">Einträge ${esc(floorLabel(cf))}</div>${pins.length?gr.map(g=>(gr.length>1||g.room?`<div class="rgh"><span>${g.room?'▭ '+esc(g.room.name):'Ohne Zimmer'}</span><span>${g.pins.length}</span></div>`:'')+g.pins.map(pli).join('')).join(''):'<p class="mut">Noch keine Pins. Klicke oben auf «📍 Pin setzen» und dann auf die Stelle im Grundriss.</p>'}`;
     return}
   const e=curEntry(p);
   const entHtml=entriesOf(p).map(x=>e&&x.id===e.id?entryEditor(p,x):`<div class="ent c" data-act="selEntry" data-id="${x.id}"><b>${fmtDate(x.date)||'ohne Datum'}</b><span>${esc((x.note||'').split('\n')[0]||'–')}</span><small class="mut">${[x.photoIds.length?'📷'+x.photoIds.length:'',x.belegIds.length?'🧾'+x.belegIds.length:'',x.mats.length?'🪵 CHF '+chf(matTotal(x.mats)):''].filter(Boolean).join(' ')}${entTags(x).length?'<br>'+gwDots(entTags(x)):''}</small></div>`).join('');
   el.innerHTML=`<div class="hd"><button class="b sm" data-act="closePin">‹ Alle Pins</button><span class="pnr">${p.nr}</span></div>
   <label>Titel / Raum<input data-f="title" value="${esc(p.title)}" placeholder="z.B. Bad OG – Wandanschluss"></label>
+  ${roomsOf(floorById(p.floorId)).length?`<p class="proom">▭ Zimmer: ${roomOfPin(p)?esc(roomOfPin(p).name):'<span class="mut" style="font-weight:400">ausserhalb der Zimmerflächen</span>'}</p>`:''}
   <div class="entbar"><span class="lbl" style="margin:0">Einträge (${p.entries.length})</span><button class="b sm p" data-act="newEntry">+ Neuer Eintrag</button></div>
   ${entHtml}
   <div style="margin-top:18px"><button class="b d" data-act="delPin">Pin löschen</button></div>`;
@@ -732,7 +761,7 @@ function renderFotos(){
   $('#v-fotos').innerHTML=`<div class="fbar"><button class="tagb ${!UI.pf?'on':''}" style="--c:#1f2328" data-act="pfSet" data-id="">Alle</button>${GEWERKE.map(g=>`<button class="tagb ${UI.pf===g?'on':''}" style="--c:${GWC[g]}" data-act="pfSet" data-id="${g}">${g}</button>`).join('')}
     <select data-ch="pfl"><option value="">Alle Pläne</option>${orderedFloors().map(f=>`<option value="${f.id}" ${UI.pfl===f.id?'selected':''}>${esc(floorLabel(f))}</option>`).join('')}</select>
     <span class="sp"></span><span class="mut">${items.length} Foto(s)</span></div>
-    ${items.length?`<div class="fgrid">${items.map(x=>`<div class="fc"><img src="${urlOf(x.id)}" alt="" data-act="zoomImg" data-id="${x.id}" loading="lazy"><div class="fcap"><b>${esc(floorLabel(x.f))} · ${x.p.nr} ${esc(x.p.title||'')}</b><span class="mut">${fmtDate(x.e.date)}${x.e.note?' · '+esc(x.e.note.split('\n')[0]):''}</span><div>${gwDots(x.tg)}</div><a data-act="gotoEntry" data-id="${x.p.id}" data-e="${x.e.id}">Zum Eintrag ›</a></div></div>`).join('')}</div>`
+    ${items.length?`<div class="fgrid">${items.map(x=>`<div class="fc"><img src="${urlOf(x.id)}" alt="" data-act="zoomImg" data-id="${x.id}" loading="lazy"><div class="fcap"><b>${esc(floorLabel(x.f))}${roomOfPin(x.p)?' · '+esc(roomOfPin(x.p).name):''} · ${x.p.nr} ${esc(x.p.title||'')}</b><span class="mut">${fmtDate(x.e.date)}${x.e.note?' · '+esc(x.e.note.split('\n')[0]):''}</span><div>${gwDots(x.tg)}</div><a data-act="gotoEntry" data-id="${x.p.id}" data-e="${x.e.id}">Zum Eintrag ›</a></div></div>`).join('')}</div>`
       :`<p class="mut c" style="margin-top:40px">${UI.pf?'Keine Fotos mit Gewerk «'+UI.pf+'». Gewerke markierst du im Eintrag mit den farbigen Knöpfen.':'Noch keine Fotos erfasst.'}</p>`}`}
 function showImg(id){const lb=$('#lb');lb.querySelector('img').src=urlOf(id);lb.hidden=false}
 
@@ -791,11 +820,20 @@ const ACT={
     const b=await createBld(name.trim(),null);
     const s=siteFloor();if(s&&s.planId&&confirm(`Möchtest du «${b.name}» jetzt auf dem Situationsplan umranden?`)){UI.floor=s.id;UI.pin=null;UI.add=false;UI.draw={bid:b.id,pts:[]};UI.zoom=1}
     renderPlan()},
+  markRoom:()=>{UI.add=false;UI.pin=null;UI.draw={kind:'room',rid:null,pts:[]};renderPlan();toast('Rechteck: 2 gegenüberliegende Ecken antippen. Andere Formen: alle Ecken nacheinander. Dann «✓ Fertig».',6000)},
+  redrawRoom:id=>{UI.add=false;UI.pin=null;UI.draw={kind:'room',rid:id,pts:[]};renderPlan()},
+  delRoom:async id=>{const f=curFloor();if(!f||!f.rooms)return;const r=f.rooms.find(x=>x.id===id);if(!r||!confirm(`Zimmer «${r.name}» löschen?\n(Die Pins darin bleiben erhalten.)`))return;f.rooms=f.rooms.filter(x=>x.id!==id);await dbPut('floors',f);renderPlan()},
   markBld:()=>{UI.add=false;UI.pin=null;UI.draw={bid:null,pts:[]};renderPlan();toast('Tippe nacheinander auf die Ecken des Gebäudes, dann «✓ Fertig».',5000)},
   redraw:id=>{const s=siteFloor();if(!s||!s.planId)return toast('Zuerst einen Situationsplan hochladen.');UI.floor=s.id;UI.pin=null;UI.add=false;UI.draw={bid:id,pts:[]};renderPlan()},
   drawUndo:()=>{if(UI.draw){UI.draw.pts.pop();renderStage()}},
   drawCancel:()=>{UI.draw=null;renderPlan()},
-  drawDone:async()=>{const d=UI.draw;if(!d||d.pts.length<3)return toast('Mindestens 3 Ecken antippen.');
+  drawDone:async()=>{const d=UI.draw;if(d&&d.kind==='room'){const f=curFloor();if(!f||d.pts.length<2)return toast('Mindestens 2 Ecken antippen.');
+      const area=(d.pts.length===2?rectPts(d.pts):d.pts).map(([x,y])=>[+x.toFixed(4),+y.toFixed(4)]);
+      if(polyArea(area)<0.0004)return toast('Fläche ist zu klein – bitte gegenüberliegende Ecken antippen.');
+      f.rooms=f.rooms||[];let r=d.rid&&f.rooms.find(x=>x.id===d.rid);
+      if(!r){const name=prompt('Name des Zimmers (z.B. Keller, Bad, Küche):');if(!name||!name.trim())return;r={id:uid(),name:name.trim()};f.rooms.push(r)}
+      r.area=area;await dbPut('floors',f);UI.draw=null;renderPlan();const n=pinsOf(f.id).filter(p=>roomOfPin(p)===r).length;toast(`Zimmer «${r.name}» gespeichert${n?' – '+n+' Pin(s) zugeordnet':''}.`,4000);return}
+    if(!d||d.pts.length<3)return toast('Mindestens 3 Ecken antippen.');
     let b=d.bid&&bldById(d.bid);
     if(!b){const name=prompt('Name des Gebäudes (z.B. Haus, Garage, Schopf):',S.buildings.some(x=>x.name==='Haus')?'':'Haus');if(!name||!name.trim())return;
       b=S.buildings.find(x=>x.name.trim().toLowerCase()===name.trim().toLowerCase())||await createBld(name.trim(),null)}
@@ -885,6 +923,7 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(d.mq!==undefined||d.mp!==undefined){const p=pinById(UI.pin),e=curEntry(p);if(!e)return;const m=e.mats[+(d.mq??d.mp)];if(!m)return;
     if(d.mq!==undefined)m.qty=parseAmount(t.value);else m.price=parseAmount(t.value)===''?null:parseAmount(t.value);await dbPut('pins',p);renderPinPanel();return}
   if(d.opt){UI.opts[d.opt]=t.checked;return}
+  if(d.room){const f=curFloor(),r=f&&(f.rooms||[]).find(x=>x.id===d.room);if(!r||!t.value.trim())return renderPlan();r.name=t.value.trim();await dbPut('floors',f);renderStage();renderPinPanel();return}
   if(d.bld){const b=bldById(d.bld);if(!b||!t.value.trim())return renderPlan();b.name=t.value.trim();await dbPut('buildings',b);renderFloorList();renderStage();return}
   if(d.pf){S.project[d.pf]=t.value;await dbPut('kv',S.project);if(d.pf==='name')document.querySelectorAll('[data-pf="name"]').forEach(i=>{if(i!==t)i.value=t.value});return}
   if(d.split){const b=belegById(t.closest('tr').dataset.id);if(!b)return;b.split=b.split||{};const v=parseAmount(t.value);if(v==='')delete b.split[d.split];else b.split[d.split]=v;await dbPut('belege',b);renderBelege();return}
@@ -943,7 +982,7 @@ $('#stage').addEventListener('pointermove',e=>{
 });
 function ptrEnd(e){if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;
   if(e.type==='pointerup'&&tap&&tap.id===e.pointerId){const plan=$('#stage .plan');if(plan){const r=plan.getBoundingClientRect();const x=clamp((e.clientX-r.left)/r.width),y=clamp((e.clientY-r.top)/r.height),f=curFloor();
-    if(UI.draw&&isSite(f)){UI.draw.pts.push([x,y]);renderStage()}
+    if(UI.draw&&(UI.draw.kind==='room'?!isSite(f):isSite(f))){UI.draw.pts.push([x,y]);renderStage()}
     else if(UI.add)addPinAt(x,y);
     else if(isSite(f)){const b=bldsSorted().find(b=>b.area&&b.area.length>2&&inPoly(x,y,b.area));if(b)ACT.openBld(b.id)}}}
   if(ptrs.size===0)tap=null}
@@ -964,15 +1003,17 @@ async function doPrint(){
    <tr><td>Umfang</td><td>${fl.length} Plan/Pläne · ${S.pins.length} Pins · ${S.pins.reduce((s,p)=>s+p.entries.length,0)} Einträge · ${S.pins.reduce((s,p)=>s+pinPhotos(p).length,0)} Fotos · ${S.belege.length} Belege</td></tr>
    ${allMats().length?`<tr><td>Material total</td><td>CHF ${chf(matTotal(allMats()))}<br><small>${GEWERKE.map(g=>{const t=matTotal(allMats().filter(m=>(m.gw||'Holzbau')===g));return t?g+' '+chf(t):''}).filter(Boolean).join(' · ')}</small></td></tr>`:''}
    ${S.belege.length?`<tr><td>Total Belege</td><td>CHF ${chf(S.belege.reduce((s,b)=>s+(+b.amount||0),0))}</td></tr>`:''}</table>
-   <h3>Inhalt</h3><ol>${fl.map(f=>`<li>${esc(floorLabel(f))} (${pinsOf(f.id).length} Pins)</li>`).join('')}${o.entries?'<li>Kostenübersicht pro Pin</li>':''}${o.mats&&allMats().length?'<li>Materialbezug</li>':''}${o.list&&S.belege.length?'<li>Belegliste</li>':''}${o.att&&S.belege.length?'<li>Anhang: Belege</li>':''}</ol></section>`;
+   <h3>Inhalt</h3><ol>${fl.map(f=>`<li>${esc(floorLabel(f))} (${pinsOf(f.id).length} Pins${roomsOf(f).length?' in '+roomsOf(f).length+' Zimmern: '+roomsOf(f).map(r=>esc(r.name)).join(', '):''})</li>`).join('')}${o.entries?'<li>Kostenübersicht nach Zimmer und Pin</li>':''}${o.mats&&allMats().length?'<li>Materialbezug</li>':''}${o.list&&S.belege.length?'<li>Belegliste</li>':''}${o.att&&S.belege.length?'<li>Anhang: Belege</li>':''}</ol></section>`;
   const G=o.gw,eOk=e=>!G||entTags(e).includes(G);
   for(const f of fl){const pins=pinsOf(f.id).filter(p=>p.entries.some(eOk));if(G&&!pins.length)continue;
     if(o.plans&&f.planId){const b=blobMap.get(f.planId)||{};const w=b.w||1,hh=b.h||1;const wmm=Math.min(184,240*w/hh);
       h+=`<section class="pg"><h2>${esc(floorLabel(f))}${isSite(f)?'':' – Grundriss'}</h2><div class="pplan" style="width:${wmm.toFixed(1)}mm"><img src="${urlOf(f.planId)}" alt="">${areasHtml(f)}${pins.map(p=>`<span class="pin" style="left:${p.x*100}%;top:${p.y*100}%">${p.nr}${pinLbl(p)}</span>`).join('')}</div></section>`}
-    if(o.entries)for(const p of pins){const es=entriesOf(p).filter(eOk);
+    if(o.entries)for(const grp of pinGroups(f,pins)){if(!grp.pins.length)continue;const hasRooms=roomsOf(f).length>0;let rb=0,rm=0;
+    if(hasRooms)h+=`<h2 class="roomh">${grp.room?'▭ '+esc(grp.room.name):'Ohne Zimmer'} <small>· ${esc(floorLabel(f))} · ${grp.pins.length} Pin(s)</small></h2>`;
+    for(const p of grp.pins){const es=entriesOf(p).filter(eOk);
       const pb=belegeSorted().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||b.gewerk===G));
-      const bSum=pb.reduce((x,b)=>x+shareOf(b,p.id),0),mSum=matTotal(es.flatMap(e=>e.mats));
-      h+=`<section class="pinsec"><h2><span class="enr" style="display:inline-flex;margin-right:2mm;vertical-align:middle">${p.nr}</span>${esc(p.title||'Ohne Titel')} <span style="font-weight:400;color:#666;font-size:12pt">· ${esc(floorLabel(f))}</span></h2>
+      const bSum=pb.reduce((x,b)=>x+shareOf(b,p.id),0),mSum=matTotal(es.flatMap(e=>e.mats));rb+=bSum;rm+=mSum;
+      h+=`<section class="pinsec"><h2 class="pinh"><span class="enr" style="display:inline-flex;margin-right:2mm;vertical-align:middle">${p.nr}</span>${esc(p.title||'Ohne Titel')} <span style="font-weight:400;color:#666;font-size:11pt">· ${esc(floorLabel(f))}${grp.room?' · '+esc(grp.room.name):''}</span></h2>
       <h3 class="ph">Fortschritte${es.length?` <span style="font-weight:400;color:#666">(${fmtDate(es[0].date)}${es.length>1?' – '+fmtDate(es[es.length-1].date):''})</span>`:''}</h3>
       ${es.map(e=>`<div class="ent-p"><div class="edt">${fmtDate(e.date)||'ohne Datum'}${entTags(e).length?` <span style="font-weight:400;color:#555">· ${entTags(e).join(', ')}</span>`:''}</div>
         ${e.note?`<p>${nl2br(e.note)}</p>`:''}${e.material?`<p><i>Material:</i> ${nl2br(e.material)}</p>`:''}
@@ -982,12 +1023,15 @@ async function doPrint(){
       ${pb.length?`<table class="mt"><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Gewerk</th><th class="r">Beleg CHF</th><th class="r">Anteil Pin CHF</th></tr></thead><tbody>
         ${pb.map(b=>{const n=belegShares(b).size;return `<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.gewerk||'')}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td><td class="r">${chf(shareOf(b,p.id))}${n>1?`<br><small style="color:#666">aufgeteilt auf ${n} Pins</small>`:''}</td></tr>`}).join('')}
         <tr class="tot"><td colspan="6">Total Belege Pin ${p.nr}</td><td class="r">${chf(bSum)}</td></tr></tbody></table>`:'<p style="color:#666">Keine Belege zugeordnet.</p>'}
-      <div class="ptot">Kosten Pin ${p.nr}: Belege CHF ${chf(bSum)}${mSum?` · Holzbau-Material CHF ${chf(mSum)} · Total CHF ${chf(bSum+mSum)}`:''}</div></div></section>`}}
+      <div class="ptot">Kosten Pin ${p.nr}: Belege CHF ${chf(bSum)}${mSum?` · Holzbau-Material CHF ${chf(mSum)} · Total CHF ${chf(bSum+mSum)}`:''}</div></div></section>`}
+    if(hasRooms&&grp.pins.length>1)h+=`<div class="rtot">Total ${grp.room?'Zimmer '+esc(grp.room.name):'ohne Zimmer'}: Belege CHF ${chf(rb)}${rm?` · Holzbau-Material CHF ${chf(rm)} · Total CHF ${chf(rb+rm)}`:''}</div>`}}
   if(o.entries){const rows=[];let tb=0,tm=0;
-    for(const f of fl)for(const p of pinsOf(f.id).filter(p=>p.entries.some(eOk))){const bS=belegeSorted().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||b.gewerk===G)).reduce((x,b)=>x+shareOf(b,p.id),0),mS=matTotal(entriesOf(p).filter(eOk).flatMap(e=>e.mats));tb+=bS;tm+=mS;rows.push(`<tr><td>${esc(floorLabel(f))}</td><td>${p.nr} ${esc(p.title||'')}</td><td class="r">${chf(bS)}</td><td class="r">${mS?chf(mS):''}</td><td class="r">${chf(bS+mS)}</td></tr>`)}
+    for(const f of fl)for(const grp of pinGroups(f,pinsOf(f.id).filter(p=>p.entries.some(eOk)))){if(!grp.pins.length)continue;let gb=0,gm=0;const rn=grp.room?grp.room.name:(roomsOf(f).length?'Ohne Zimmer':'–');
+      for(const p of grp.pins){const bS=belegeSorted().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||b.gewerk===G)).reduce((x,b)=>x+shareOf(b,p.id),0),mS=matTotal(entriesOf(p).filter(eOk).flatMap(e=>e.mats));tb+=bS;tm+=mS;gb+=bS;gm+=mS;rows.push(`<tr><td>${esc(floorLabel(f))}</td><td>${esc(rn)}</td><td>${p.nr} ${esc(p.title||'')}</td><td class="r">${chf(bS)}</td><td class="r">${mS?chf(mS):''}</td><td class="r">${chf(bS+mS)}</td></tr>`)}
+      if(roomsOf(f).length&&grp.pins.length>1)rows.push(`<tr class="sub"><td colspan="3">Total ${esc(floorLabel(f))} · ${esc(rn)}</td><td class="r">${chf(gb)}</td><td class="r">${gm?chf(gm):''}</td><td class="r">${chf(gb+gm)}</td></tr>`)}
     const ohne=belegeSorted().filter(b=>(!G||b.gewerk===G)&&!S.pins.some(p=>pinBelegIds(p).includes(b.id)));const to=ohne.reduce((x,b)=>x+(+b.amount||0),0);
-    h+=`<section class="msum"><h2>Kostenübersicht pro Pin</h2><table class="mt"><thead><tr><th>Plan</th><th>Pin</th><th class="r">Belege CHF</th><th class="r">Holzbau-Material CHF</th><th class="r">Total CHF</th></tr></thead><tbody>${rows.join('')}
-      <tr class="tot"><td colspan="2">Total Pins</td><td class="r">${chf(tb)}</td><td class="r">${tm?chf(tm):''}</td><td class="r">${chf(tb+tm)}</td></tr></tbody></table>
+    h+=`<section class="msum"><h2>Kostenübersicht nach Zimmer und Pin</h2><table class="mt"><thead><tr><th>Plan</th><th>Zimmer</th><th>Pin</th><th class="r">Belege CHF</th><th class="r">Holzbau-Material CHF</th><th class="r">Total CHF</th></tr></thead><tbody>${rows.join('')}
+      <tr class="tot"><td colspan="3">Total Pins</td><td class="r">${chf(tb)}</td><td class="r">${tm?chf(tm):''}</td><td class="r">${chf(tb+tm)}</td></tr></tbody></table>
       ${ohne.length?`<h3>Belege ohne Pin-Zuordnung</h3><table class="mt"><tbody>${ohne.map(b=>`<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td></tr>`).join('')}<tr class="tot"><td colspan="4">Total ohne Pin</td><td class="r">${chf(to)}</td></tr></tbody></table>`:''}
       <h3>Gesamt</h3><table class="mt"><tbody><tr><td>Belege (Pins + ohne Pin)</td><td class="r">CHF ${chf(tb+to)}</td></tr>${tm?`<tr><td>Holzbau-Material (Regiepreisliste netto)</td><td class="r">CHF ${chf(tm)}</td></tr>`:''}<tr class="tot"><td>Total</td><td class="r">CHF ${chf(tb+to+tm)}</td></tr></tbody></table></section>`}
   if(o.mats&&allMats().length&&(!o.gw||o.gw==='Holzbau')){const all=allMats();
