@@ -362,6 +362,18 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 
 <script>
 'use strict';
+/* ======================================================================
+   APP-KENNUNG – bei einer Kopie dieses Programms NUR HIER anpassen.
+   Jede Kopie braucht eigene Werte, sonst teilen sich die Programme auf
+   dem Gerät denselben Speicher bzw. in Supabase dieselben Daten.
+   ====================================================================== */
+const APP={
+  id:'bp',                    // Kurzkennung: Schlüssel im Browser-Speicher
+  db:'baustellenprotokoll',   // Name der lokalen Datenbank (IndexedDB)
+  table:'items',              // Supabase-Tabelle
+  bucket:'files',             // Supabase-Speicher für Fotos/Pläne/Belege
+  title:'Baustellenprotokoll' // Standardname
+};
 /* ---------- Hilfsfunktionen ---------- */
 const $=s=>document.querySelector(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
@@ -375,7 +387,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='14 (08.10.2026)';
+const APP_VERSION='15 (08.10.2026)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 const GEWERKE=['Holzbau','Sanitär','Elektro','Fliesen','Gipser','Maler'];
 const GWC={Holzbau:'#92400e',Sanitär:'#2563eb',Elektro:'#ca8a04',Fliesen:'#0d9488',Gipser:'#6b7280',Maler:'#9333ea'};
@@ -393,7 +405,7 @@ function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;t.hidden=false
 
 /* ---------- Datenbank (IndexedDB, lokal im Browser) ---------- */
 let DB;
-function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('baustellenprotokoll',4);
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(APP.db,4);
   r.onupgradeneeded=()=>{const d=r.result;for(const s of ['kv','floors','buildings','pins','belege','blobs','queue','articles'])if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'})};
   r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)})}
 function tx(store,mode,fn){return new Promise((res,rej)=>{const t=DB.transaction(store,mode);const r=fn(t.objectStore(store));let out;if(r)r.onsuccess=()=>{out=r.result};t.oncomplete=()=>res(out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
@@ -412,9 +424,9 @@ async function dbDel(s,id){await rawDel(s,id);if(SYNC_KIND[s])await enqueue(s,id
 const dbClear=s=>tx(s,'readwrite',st=>st.clear());
 
 /* ---------- Zustand ---------- */
-const S={project:{id:'project',name:'Baustellenprotokoll',address:'',author:'',period:''},floors:[],buildings:[],articles:[],pins:[],belege:[],blobs:[]};
+const S={project:{id:'project',name:APP.title,address:'',author:'',period:''},floors:[],buildings:[],articles:[],pins:[],belege:[],blobs:[]};
 const ZOOM0=.5;
-let SHOWLBL=false;try{SHOWLBL=localStorage.getItem('bp_lbl')==='1'}catch(_){}
+let SHOWLBL=false;try{SHOWLBL=localStorage.getItem(APP.id+'_lbl')==='1'}catch(_){}
 const UI={tab:'plan',floor:null,pin:null,add:false,draw:null,newArt:null,gf:'',pf:'',pfl:'',gwOpen:new Set(),fg:'',zoom:ZOOM0,fy:'',fc:'',q:'',hl:null,opts:{plans:true,entries:true,mats:true,list:true,att:true,gw:''}};
 const blobMap=new Map(), urls=new Map();
 const floorById=id=>S.floors.find(f=>f.id===id);
@@ -853,7 +865,7 @@ const ACT={
     UI.floor=firstFloorId();UI.pin=null;renderPlan()},
   selPin:id=>{UI.pin=id;UI.entry=null;renderPlan()},
   selEntry:id=>{UI.entry=id;renderPinPanel()},
-  togLbl:()=>{SHOWLBL=!SHOWLBL;try{localStorage.setItem('bp_lbl',SHOWLBL?'1':'0')}catch(_){}renderStage()},
+  togLbl:()=>{SHOWLBL=!SHOWLBL;try{localStorage.setItem(APP.id+'_lbl',SHOWLBL?'1':'0')}catch(_){}renderStage()},
   togTag:async g=>{const p=pinById(UI.pin),e=curEntry(p);if(!e)return;e.tags=e.tags||[];e.tags=e.tags.includes(g)?e.tags.filter(x=>x!==g):[...e.tags,g];await dbPut('pins',p);renderPinPanel();renderStage()},
   pfSet:g=>{UI.pf=g||'';renderFotos()},
   gotoEntry:(id,a)=>{const p=pinById(id);if(!p)return;UI.tab='plan';UI.floor=p.floorId;UI.pin=id;UI.entry=a.dataset.e||null;UI.zoom=ZOOM0;render()},
@@ -1085,12 +1097,12 @@ async function doRestore(file){if(!file)return;
 /* Einmalig eintragen: Project URL und anon/public key aus Supabase → Project Settings → API */
 const CFG={url:'https://mjitkzajdbxqlrkfqqye.supabase.co',key:'sb_publishable_hO6tvZloIsSQPcuR-0DNgg_tZnpcdzU'};
 const cloudOn=()=>!!(CFG.url&&CFG.key);
-let SES=null;try{SES=JSON.parse(localStorage.getItem('bp_session')||'null')}catch(e){}
+let SES=null;try{SES=JSON.parse(localStorage.getItem(APP.id+'_session')||'null')}catch(e){}
 let SYNCMETA={id:'sync',lastPull:null,initialized:false};
 const syncMeta=async()=>SYNCMETA;
 let syncing=false,syncAgain=false,syncTimer=null,lastErr='',SSTATE='off';
 class AuthError extends Error{}
-function saveSes(){try{if(SES)localStorage.setItem('bp_session',JSON.stringify(SES));else localStorage.removeItem('bp_session')}catch(e){}}
+function saveSes(){try{if(SES)localStorage.setItem(APP.id+'_session',JSON.stringify(SES));else localStorage.removeItem(APP.id+'_session')}catch(e){}}
 async function authReq(grant,body){
   const r=await fetch(`${CFG.url}/auth/v1/token?grant_type=${grant}`,{method:'POST',headers:{apikey:CFG.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
   const j=await r.json().catch(()=>({}));
@@ -1103,7 +1115,7 @@ async function api(path,opt={}){await ensureToken();
   if(r.status===401){SES.expires_at=0;saveSes();throw new Error('Sitzung abgelaufen')}
   if(!r.ok){const t=await r.text().catch(()=>'');throw new Error(`Server ${r.status}: ${t.slice(0,160)}`)}return r}
 async function upsertItems(rows){if(!rows.length)return;
-  await api('/rest/v1/items?on_conflict=id',{method:'POST',headers:{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)})}
+  await api(`/rest/v1/${APP.table}?on_conflict=id`,{method:'POST',headers:{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)})}
 async function dequeueIf(e){await tx('queue','readwrite',st=>{const g=st.get(e.id);g.onsuccess=()=>{if(g.result&&g.result.t===e.t)st.delete(e.id)}})}
 const queueCount=async()=>(await dbAll('queue')).length;
 function localRec(store,id){if(store==='kv')return id==='project'?S.project:null;return (S[store]||[]).find(x=>x.id===id)||null}
@@ -1118,9 +1130,9 @@ async function push(){
   let n=0;const tot=q.filter(e=>e.store==='blobs'&&e.op==='put').length;
   for(const e of q.filter(e=>e.store==='blobs')){const rec=blobMap.get(e.recId);
     if(e.op==='put'){if(rec&&rec.blob){setSync('busy',`Lade Dateien hoch (${++n}/${tot}) …`);
-        await api(`/storage/v1/object/files/${e.recId}`,{method:'POST',headers:{'x-upsert':'true','Content-Type':rec.mime||'application/octet-stream'},body:rec.blob});
+        await api(`/storage/v1/object/${APP.bucket}/${e.recId}`,{method:'POST',headers:{'x-upsert':'true','Content-Type':rec.mime||'application/octet-stream'},body:rec.blob});
         await upsertItems([{id:e.recId,kind:'blob',data:blobMeta(rec),deleted:false}])}}
-    else{try{await api(`/storage/v1/object/files/${e.recId}`,{method:'DELETE'})}catch(_){}
+    else{try{await api(`/storage/v1/object/${APP.bucket}/${e.recId}`,{method:'DELETE'})}catch(_){}
       await upsertItems([{id:e.recId,kind:'blob',data:null,deleted:true}])}
     await dequeueIf(e)}
   const rest=q.filter(e=>e.store!=='blobs');
@@ -1141,7 +1153,7 @@ async function applyRemote(r,pending){
 async function pull(){
   const since=SYNCMETA.lastPull?new Date(new Date(SYNCMETA.lastPull).getTime()-60000).toISOString():null;
   const pending=new Set((await dbAll('queue')).map(e=>e.id));let off=0,maxT=SYNCMETA.lastPull,changed=false,skipMin=null;
-  for(;;){const rows=await (await api(`/rest/v1/items?select=id,kind,data,deleted,updated_at${since?'&updated_at=gt.'+encodeURIComponent(since):''}&order=updated_at.asc,id.asc&limit=1000&offset=${off}`)).json();
+  for(;;){const rows=await (await api(`/rest/v1/${APP.table}?select=id,kind,data,deleted,updated_at${since?'&updated_at=gt.'+encodeURIComponent(since):''}&order=updated_at.asc,id.asc&limit=1000&offset=${off}`)).json();
     for(const r of rows){if(!maxT||new Date(r.updated_at)>new Date(maxT))maxT=r.updated_at;const k=(STORE_OF[r.kind]||'')+'|'+r.id;if(!pending.has(k)&&recentlyTouched(k)){if(!skipMin||new Date(r.updated_at)<new Date(skipMin))skipMin=r.updated_at;continue}if(await applyRemote(r,pending))changed=true}
     if(rows.length<1000)break;off+=1000}
   SYNCMETA.lastPull=skipMin?new Date(new Date(skipMin).getTime()-1).toISOString():maxT;await rawPut('kv',SYNCMETA);
@@ -1149,7 +1161,7 @@ async function pull(){
 let dlRunning=false;
 async function downloadMissing(){if(dlRunning)return;dlRunning=true;let n=0,last=Date.now();
   try{for(const rec of S.blobs.filter(b=>!b.blob)){if(!SES||!navigator.onLine)break;
-      const r=await api(`/storage/v1/object/authenticated/files/${rec.id}`);rec.blob=await r.blob();await rawPut('blobs',rec);n++;
+      const r=await api(`/storage/v1/object/authenticated/${APP.bucket}/${rec.id}`);rec.blob=await r.blob();await rawPut('blobs',rec);n++;
       if(Date.now()-last>1500){last=Date.now();softRender()}}}
   catch(e){console.warn('Download',e)}finally{dlRunning=false;if(n)softRender()}}
 let pendingRender=false;
@@ -1189,7 +1201,7 @@ async function logout(){const q=await queueCount();
   S.pins.forEach(normPin);
   UI.floor=firstFloorId();
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
-  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(e=>console.warn(e));
+  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js?app='+APP.id).catch(e=>console.warn(e));
   render();
   if(cloudOn()){$('#syncBtn').hidden=false;if(!SES)showLogin();else{setSync(navigator.onLine?'busy':'off');syncNow()}
     window.addEventListener('online',()=>syncNow());window.addEventListener('offline',()=>setSync('off'));
