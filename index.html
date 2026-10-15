@@ -67,7 +67,10 @@ textarea{resize:vertical}
 .pli span{display:flex;flex-direction:column}
 .pli small{color:var(--mut)}
 .pnr{width:30px;height:30px;border-radius:50%;background:#1f2328;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:13px;margin-left:auto}
-.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:4px}
+.drophint{font-size:11px;color:var(--mut);margin:0 0 14px;text-align:center}
+.ent.dropon{outline:3px dashed var(--acc);outline-offset:-3px;background:#fff7ed}
+#pinPanel.dropon .ent.o{outline:3px dashed var(--acc);outline-offset:-3px}
 .th{position:relative;aspect-ratio:1;border-radius:7px;overflow:hidden;background:#eee}
 .th img{width:100%;height:100%;object-fit:cover;cursor:zoom-in;display:block}
 .th button{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;line-height:20px;padding:0}
@@ -474,7 +477,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='16 (12.10.2026, Neuerungen aus Protokoll 2 übernommen)';
+const APP_VERSION='17 (15.10.2026, Fotos hineinziehen)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -871,7 +874,7 @@ function entryEditor(p,e){
   <div class="tags">${GEWERKE.map(g=>`<button class="tagb ${(e.tags||[]).includes(g)?'on':''}" style="--c:${GWC[g]}" data-act="togTag" data-id="${g}">${g}</button>`).join('')}</div>
   <label>Bemerkungen / Fortschritt<textarea data-ef="note" rows="4" placeholder="Was wurde gemacht, Stand, Besonderheiten …">${esc(e.note)}</textarea></label>
   <div class="lbl">Fotos</div>
-  <div class="thumbs">${e.photoIds.map(id=>`<div class="th"><img src="${urlOf(id)}" alt="" data-act="zoomImg" data-id="${id}"><button data-act="rmPhoto" data-id="${id}" title="Foto entfernen">×</button></div>`).join('')}<label class="th add cam" title="Foto aufnehmen">📷<input type="file" accept="image/*" capture="environment" hidden data-up="pinPhotos"></label><label class="th add" title="Fotos aus der Galerie">＋<input type="file" accept="image/*" multiple hidden data-up="pinPhotos"></label></div>
+  <div class="thumbs">${e.photoIds.map(id=>`<div class="th"><img src="${urlOf(id)}" alt="" data-act="zoomImg" data-id="${id}"><button data-act="rmPhoto" data-id="${id}" title="Foto entfernen">×</button></div>`).join('')}<label class="th add cam" title="Foto aufnehmen">📷<input type="file" accept="image/*" capture="environment" hidden data-up="pinPhotos"></label><label class="th add" title="Fotos aus der Galerie">＋<input type="file" accept="image/*" multiple hidden data-up="pinPhotos"></label></div><p class="drophint">… oder Fotos hierher ziehen</p>
   <div class="lbl">Holzbau – Material &amp; Belege</div>
   ${GEWERKE.filter(g=>g==='Holzbau'||e.gwText[g]||entBelegeGw(e,g).length||matsOf(e,g).length).map(gwBlock).join('')}
   ${e.material?`<label style="margin-top:10px">Material allgemein<textarea data-ef="material" rows="2">${esc(e.material)}</textarea></label>`:''}
@@ -1322,6 +1325,25 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
       if(now&&!had)toast(`⚠ B-${pad(b.nr)} ist möglicherweise doppelt: ${now.map(x=>'B-'+pad(x.b.nr)).join(', ')} (${now[0].r})`,7000)}}});
 const saveTimers={};
 document.addEventListener('toggle',e=>{const d=e.target;if(d.tagName==='DETAILS'&&d.dataset&&d.dataset.gw!==undefined){if(d.open)UI.gwOpen.add(d.dataset.gw);else UI.gwOpen.delete(d.dataset.gw)}},true);
+/* ---------- Fotos in einen Pin-Eintrag hineinziehen (PC/Mac) ---------- */
+const dragImgs=dt=>dt&&[...(dt.items||[])].some(i=>i.kind==='file'&&(!i.type||i.type.startsWith('image/')));
+const isImgFile=f=>f.type.startsWith('image/')||/\.(jpe?g|png|heic|heif|webp|gif|bmp)$/i.test(f.name);
+function clearDrop(){document.querySelectorAll('.dropon').forEach(x=>x.classList.remove('dropon'))}
+(()=>{const pp=$('#pinPanel');if(!pp)return;let depth=0;
+  pp.addEventListener('dragenter',e=>{if(!dragImgs(e.dataTransfer)||!UI.pin)return;e.preventDefault();depth++;
+    const c=e.target.closest('.ent.c');clearDrop();if(c)c.classList.add('dropon');else pp.classList.add('dropon')});
+  pp.addEventListener('dragover',e=>{if(!dragImgs(e.dataTransfer)||!UI.pin)return;e.preventDefault();e.dataTransfer.dropEffect='copy';
+    const c=e.target.closest('.ent.c');if(c&&!c.classList.contains('dropon')){clearDrop();c.classList.add('dropon')}else if(!c&&!pp.classList.contains('dropon')){clearDrop();pp.classList.add('dropon')}});
+  pp.addEventListener('dragleave',e=>{depth=Math.max(0,depth-1);if(!depth)clearDrop()});
+  pp.addEventListener('drop',async e=>{if(!UI.pin)return;e.preventDefault();depth=0;const c=e.target.closest('.ent.c');clearDrop();
+    const fs=[...(e.dataTransfer.files||[])].filter(isImgFile);if(!fs.length){toast('Nur Bilder können hier abgelegt werden',3000);return}
+    const p=pinById(UI.pin);if(!p)return;
+    if(c&&c.dataset.id){UI.entry=c.dataset.id}else if(UI.entry==='none'||!curEntry(p)){UI.entry=null}
+    const en=curEntry(p);if(!en)return;renderPinPanel();await addPinPhotos(fs);toast(`${fs.length} Foto(s) zu «${entLabel(p,en)}» hinzugefügt`,3000)});
+  // Bild ausserhalb abgelegt: Browser soll die Datei nicht öffnen
+  window.addEventListener('dragover',e=>{if(dragImgs(e.dataTransfer))e.preventDefault()});
+  window.addEventListener('drop',e=>{if(dragImgs(e.dataTransfer)&&!e.defaultPrevented){e.preventDefault();toast(UI.pin?'Fotos bitte rechts auf den Eintrag ziehen':'Zuerst einen Pin öffnen, dann die Fotos auf den Eintrag ziehen',3500)}});
+})();
 let bflT=null;
 document.addEventListener('input',e=>{const t=e.target;
   if(t.dataset.bfl!==undefined&&t.tagName==='INPUT'){UI.bfl[t.dataset.bfl]=t.value;clearTimeout(bflT);bflT=setTimeout(()=>{const k=t.dataset.bfl,pos=t.selectionStart;renderBelege();
