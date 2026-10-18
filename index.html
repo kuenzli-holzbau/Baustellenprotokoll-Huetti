@@ -338,6 +338,8 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .fsel{display:inline-flex;gap:4px;margin-left:auto}
 .th.selm img{opacity:.75}
 .th.sel{outline:3px solid #0f766e;outline-offset:-3px}
+.orph .th small.on{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);color:#fff;font-size:9.5px;padding:1px 4px;white-space:nowrap;overflow:hidden}
+.orph .th img[alt=PDF]{background:#f1f5f9}
 .th .thck{position:absolute;right:4px;bottom:28px;width:22px;height:22px;border-radius:50%;background:#fff;border:2px solid #0f766e;color:#0f766e;font:700 13px/18px sans-serif;text-align:center;pointer-events:none}
 .th.sel .thck{background:#0f766e;color:#fff}
 .asgp h3{margin:2px 0 6px;font-size:16px}
@@ -543,7 +545,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='31 (18.10.2026, mehrseitige PDF-Belege vollständig)';
+const APP_VERSION='32 (18.10.2026, sichere Synchronisierung, Sicherungspunkte, verwaiste Dateien)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -573,8 +575,8 @@ function toast(msg,ms=2600){const t=$('#toast');t.textContent=msg;t.hidden=false
 
 /* ---------- Datenbank (IndexedDB, lokal im Browser) ---------- */
 let DB;
-function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(APP.db,5);
-  r.onupgradeneeded=()=>{const d=r.result;for(const s of ['kv','floors','buildings','pins','belege','blobs','queue','articles','work'])if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'})};
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(APP.db,6);
+  r.onupgradeneeded=()=>{const d=r.result;for(const s of ['kv','floors','buildings','pins','belege','blobs','queue','articles','work','snap'])if(!d.objectStoreNames.contains(s))d.createObjectStore(s,{keyPath:'id'})};
   r.onsuccess=()=>{DB=r.result;res()};r.onerror=()=>rej(r.error)})}
 function tx(store,mode,fn){return new Promise((res,rej)=>{const t=DB.transaction(store,mode);const r=fn(t.objectStore(store));let out;if(r)r.onsuccess=()=>{out=r.result};t.oncomplete=()=>res(out);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
 const dbAll=s=>tx(s,'readonly',st=>st.getAll());
@@ -973,11 +975,11 @@ function renderStage(){
 const asgBeleg=()=>UI.assign&&UI.assign.kind!=='photos'&&belegById(UI.assign.bid);
 const asgPhotos=()=>UI.assign&&UI.assign.kind==='photos'?UI.assign:null;
 const photoTargetEntry=p=>p.entries.find(x=>/bild/i.test(x.name||''))||p.entries[0];
-async function movePhotosTo(p){const a=asgPhotos();if(!a)return;const src=pinById(a.from),se=src&&src.entries.find(x=>x.id===a.fromE);
-  if(!src||!se){UI.assign=null;renderPlan();return}if(p.id===src.id){toast('Das ist der Pin, aus dem die Fotos kommen – bitte einen anderen Pin antippen',3500);return}
-  const te=photoTargetEntry(p);if(!te)return;const ids=a.ids.filter(id=>se.photoIds.includes(id));
-  se.photoIds=se.photoIds.filter(id=>!ids.includes(id));for(const id of ids)if(!te.photoIds.includes(id))te.photoIds.push(id);
-  await dbPut('pins',src);await dbPut('pins',p);UI.assign=null;UI.floor=p.floorId;UI.pin=p.id;UI.entry=te.id;renderPlan();
+async function movePhotosTo(p){const a=asgPhotos();if(!a)return;const src=a.from?pinById(a.from):null,se=src&&src.entries.find(x=>x.id===a.fromE);
+  if(a.from&&(!src||!se)){UI.assign=null;renderPlan();return}if(src&&p.id===src.id){toast('Das ist der Pin, aus dem die Fotos kommen – bitte einen anderen Pin antippen',3500);return}
+  const te=photoTargetEntry(p);if(!te)return;const ids=se?a.ids.filter(id=>se.photoIds.includes(id)):a.ids;
+  if(se)se.photoIds=se.photoIds.filter(id=>!ids.includes(id));for(const id of ids)if(!te.photoIds.includes(id))te.photoIds.push(id);
+  if(src)await dbPut('pins',src);await dbPut('pins',p);UI.assign=null;UI.floor=p.floorId;UI.pin=p.id;UI.entry=te.id;renderPlan();
   toast(`${ids.length} Foto(s) nach Pin ${p.nr}${p.title?' '+p.title:''} («${entLabel(p,te)}») verschoben`,3500)}
 function asgIsOn(p){const a=UI.assign,b=asgBeleg();if(asgPhotos())return false;if(!b)return false;if(a.ii!=null){const it=(b.items||[])[a.ii];return !!it&&it.pin===p.id}return belegPins(b).some(x=>x.id===p.id)}
 async function asgToggle(p){if(asgPhotos())return movePhotosTo(p);const a=UI.assign,b=asgBeleg();if(!b)return;
@@ -998,7 +1000,7 @@ function asgPanel(){const b=asgBeleg(),a=UI.assign,fn=id=>floorLabel(floorById(i
     <button class="b p" data-act="asgDone" style="width:100%">✓ Fertig</button></div>`}
 function renderPinPanel(){
   const el=$('#pinPanel'),p=pinById(UI.pin);
-  if(asgPhotos()){const a=asgPhotos(),src=pinById(a.from);el.innerHTML=`<div class="asgp"><div class="lbl">Fotos verschieben</div><h3>${a.ids.length} Foto(s) aus Pin ${src?src.nr+(src.title?' '+esc(src.title):''):''}</h3>
+  if(asgPhotos()){const a=asgPhotos(),src=pinById(a.from);el.innerHTML=`<div class="asgp"><div class="lbl">Fotos verschieben</div><h3>${a.ids.length} Foto(s) ${src?'aus Pin '+src.nr+(src.title?' '+esc(src.title):''):'(verwaist)'}</h3>
     <div class="thumbs" style="margin:8px 0">${a.ids.slice(0,9).map(id=>`<div class="th"><img src="${urlOf(id)}" alt=""></div>`).join('')}</div>
     <p>👉 Tippe im Grundriss auf den <b>Ziel-Pin</b>. Die Fotos kommen dort in den Eintrag «Bilder» (bzw. den ersten Eintrag). Geschoss links wechseln.</p><button class="b" data-act="asgDone" style="width:100%">Abbrechen</button></div>`;return}
   if(UI.assign&&asgBeleg()){el.innerHTML=asgPanel();return}
@@ -1221,6 +1223,19 @@ async function newCost(nm){const n=(nm!=null?nm:prompt('Name der neuen Kostenste
   const ex=genList().find(g=>g.n.toLowerCase()===n.toLowerCase());if(ex)return ex.k;
   S.project.costs=Array.isArray(S.project.costs)?S.project.costs:[];const k='k_'+uid();S.project.costs.push({k,n});await dbPut('kv',S.project);toast(`Kostenstelle «${n}» angelegt`,2500);return k}
 function costUse(k){let n=0;for(const b of S.belege)for(const it of b.items||[])if(it.pin===k)n++;return n}
+function orphanBlobs(){const used=new Set();for(const p of S.pins)for(const e of p.entries)for(const id of e.photoIds)used.add(id);
+  for(const b of S.belege){used.add(b.fileId);used.add(b.previewId)}for(const f of S.floors)used.add(f.planId);
+  let hid=[];try{hid=JSON.parse(localStorage.getItem(APP.id+'_orphHide')||'[]')}catch(_){}
+  return S.blobs.filter(b=>!used.has(b.id)&&!hid.includes(b.id)&&!/vorschau/i.test(b.name||''))}
+function orphanCard(){const L=orphanBlobs();UI.osel=UI.osel||new Set();
+  return `<div class="card"><h2>Verwaiste Fotos &amp; Dateien</h2><p class="mut" style="font-size:13px">Dateien, die in der Cloud bzw. auf diesem Gerät vorhanden sind, aber keinem Pin, Beleg oder Plan mehr gehören – z.B. nach einem Synchronisierungsproblem.</p>
+   ${L.length?`<div class="thumbs orph">${L.map(b=>`<div class="th ${UI.osel.has(b.id)?'sel':'selm'}"><img src="${b.mime==='application/pdf'?'':urlOf(b.id)}" alt="${b.mime==='application/pdf'?'PDF':''}" data-act="oselTog" data-id="${b.id}"><span class="thck">${UI.osel.has(b.id)?'✓':''}</span>${b.mime==='application/pdf'?'<span class="tag" style="position:absolute;left:4px;top:4px">PDF</span>':''}<small class="on">${esc((b.name||'').slice(0,22))}</small></div>`).join('')}</div>
+   <div class="mbtns"><button class="b sm" data-act="oselAll">Alle</button><button class="b sm p" data-act="orphPin" ${UI.osel.size?'':'disabled'}>📍 Pin zuordnen (${UI.osel.size})</button><button class="b sm" data-act="orphBeleg" ${UI.osel.size?'':'disabled'}>🧾 Als Beleg wiederherstellen</button><button class="b sm" data-act="orphHide" ${UI.osel.size?'':'disabled'}>Ausblenden</button></div>`
+   :'<p class="mut">Keine verwaisten Dateien gefunden.</p>'}<p class="mut" style="font-size:11.5px">Noch nicht heruntergeladene Fotos erscheinen grau – sie werden im Hintergrund geladen.</p></div>`}
+async function snapCard(){const all=(await dbAll('snap')).sort((a,b)=>b.t-a.t);
+  return `<div class="card"><h2>Sicherungspunkte auf diesem Gerät</h2><p class="mut" style="font-size:13px">Automatisch beim Start und vor dem Synchronisieren (höchstens alle 2 Std., die letzten ${SNAP_KEEP}). Zurückholen ergänzt Fehlendes, ohne Neues zu löschen.</p>
+   ${all.length?`<table class="asgt"><tbody>${all.map(x=>`<tr><td>${new Date(x.t).toLocaleString('de-CH',{dateStyle:'short',timeStyle:'short'})}<br><small class="mut">${x.n.pins} Pins · ${x.n.entries} Einträge · ${x.n.fotos} Fotos · ${x.n.belege} Belege</small></td><td class="r"><button class="b sm" data-act="snapRestore" data-id="${x.id}">Zurückholen</button></td></tr>`).join('')}</tbody></table>`:'<p class="mut">Noch keine Sicherungspunkte.</p>'}
+   <p><button class="b sm" data-act="snapNow">Jetzt Sicherungspunkt setzen</button></p></div>`}
 function pstList(){const w=String(UI.pstQ||'').toLowerCase().split(/\s+/).filter(Boolean);
   const L=w.length?KAT.filter(k=>{const h=(k[0]+' '+k[1]).toLowerCase();return w.every(x=>h.includes(x))}):KAT,N=UI.pstN||60,sh=L.slice(0,N);
   return `<div class="tw pst"><table class="bt"><thead><tr><th>Art.-Nr.</th><th>Bezeichnung</th><th>Einh.</th><th class="r">Netto</th>${S.project.zOn?`<th class="r">+${qfmt(zPct())} %</th>`:''}</tr></thead><tbody>
@@ -1296,7 +1311,8 @@ function renderBelege(){
 }
 function renderExport(){
   const P=S.project,o=UI.opts;
-  $('#v-export').innerHTML=`<div class="card"><h2>Kostenübersicht</h2>${costHtml()}</div><div class="card"><h2>Protokoll als PDF</h2>
+  snapCard().then(h=>{const el=$('#snapCard');if(el)el.innerHTML=h});
+  $('#v-export').innerHTML=`<div id="snapCard"></div>${orphanCard()}<div class="card"><h2>Kostenübersicht</h2>${costHtml()}</div><div class="card"><h2>Protokoll als PDF</h2>
    <label>Titel<input data-pf="name" value="${esc(P.name)}"></label>
    <label>Baustelle / Adresse<input data-pf="address" value="${esc(P.address)}"></label>
    <label>Verfasser / Bauherr<input data-pf="author" value="${esc(P.author)}"></label>
@@ -1510,7 +1526,7 @@ const ACT={
     UI.assign={bid:id,ii};UI.pin=null;UI.add=false;UI.tab='plan';
     const fp=S.pins.find(p=>ii!=null?(b.items[ii]||{}).pin===p.id:pinBelegIds(p).includes(id));if(fp)UI.floor=fp.floorId;else if(!curFloor()||isSite(curFloor())){const f=orderedFloors().find(f=>!isSite(f));if(f)UI.floor=f.id}
     render()},
-  asgDone:async()=>{if(asgPhotos()){const a=asgPhotos();UI.assign=null;UI.pin=a.from;UI.entry=a.fromE;const sp=pinById(a.from);if(sp)UI.floor=sp.floorId;renderPlan();return}const id=UI.assign&&UI.assign.bid,bb=id&&belegById(id);if(bb&&UI.assign.ii==null&&belegPins(bb).length)await itemsFollowBeleg(bb,true);UI.assign=null;UI.tab='belege';UI.hl=id;if(id){UI.bOpen=UI.bOpen||new Set();if((belegById(id)||{}).items&&belegById(id).items.length)UI.bOpen.add(id)}render()},
+  asgDone:async()=>{if(asgPhotos()){const a=asgPhotos();UI.assign=null;if(!a.from){UI.tab='export';render();return}UI.pin=a.from;UI.entry=a.fromE;const sp=pinById(a.from);if(sp)UI.floor=sp.floorId;renderPlan();return}const id=UI.assign&&UI.assign.bid,bb=id&&belegById(id);if(bb&&UI.assign.ii==null&&belegPins(bb).length)await itemsFollowBeleg(bb,true);UI.assign=null;UI.tab='belege';UI.hl=id;if(id){UI.bOpen=UI.bOpen||new Set();if((belegById(id)||{}).items&&belegById(id).items.length)UI.bOpen.add(id)}render()},
   itemsFollow:async id=>{const b=belegById(id);if(!b)return;if(await itemsFollowBeleg(b,false)){renderBelege();toast('Alle Positionen folgen jetzt dem Beleg',2500)}},
   rmBCost:async id=>{const b=belegById(id);if(!b)return;b.cost='';await dbPut('belege',b);renderBelege()},
   bItems:id=>{UI.bOpen=UI.bOpen||new Set();UI.bOpen.has(id)?UI.bOpen.delete(id):UI.bOpen.add(id);renderBelege()},
@@ -1519,6 +1535,19 @@ const ACT={
   rmItem:async(id,a)=>{const b=belegById(id);if(!b||!b.items)return;b.items.splice(+a.dataset.ii,1);if(b.auto)b.auto.items=false;await dbPut('belege',b);renderBelege()},
   readItems:async id=>{const b=belegById(id);if(!b)return;if((b.items||[]).length&&!(b.auto&&b.auto.items)&&!confirm('Vorhandene Positionen durch die aus dem Beleg gelesenen ersetzen?'))return;
     b.auto=b.auto||{};b.auto.items=true;b.items=[];await recognizeBeleg(b,false);UI.bOpen=UI.bOpen||new Set();UI.bOpen.add(id);renderBelege()},
+  snapRestore:async id=>{await restoreSnap(id);renderExport()},
+  snapNow:async()=>{await takeSnap('manual');renderExport();toast('Sicherungspunkt gesetzt',2000)},
+  oselTog:id=>{UI.osel=UI.osel||new Set();UI.osel.has(id)?UI.osel.delete(id):UI.osel.add(id);renderExport()},
+  oselAll:()=>{const L=orphanBlobs();UI.osel=UI.osel||new Set();if(UI.osel.size===L.length)UI.osel.clear();else L.forEach(b=>UI.osel.add(b.id));renderExport()},
+  orphHide:()=>{if(!confirm(`${UI.osel.size} Datei(en) in dieser Liste ausblenden (auf diesem Gerät)?`))return;let h=[];try{h=JSON.parse(localStorage.getItem(APP.id+'_orphHide')||'[]')}catch(_){}
+    h=[...new Set([...h,...UI.osel])];try{localStorage.setItem(APP.id+'_orphHide',JSON.stringify(h))}catch(_){}UI.osel.clear();renderExport()},
+  orphPin:()=>{const ids=[...(UI.osel||[])];if(!ids.length)return;UI.assign={kind:'photos',ids,from:null,fromE:null};UI.osel.clear();UI.tab='plan';UI.pin=null;
+    if(!curFloor()||isSite(curFloor())){const f=orderedFloors().find(f=>!isSite(f));if(f)UI.floor=f.id}render()},
+  orphBeleg:async()=>{const ids=[...(UI.osel||[])];if(!ids.length||!confirm(`${ids.length} Datei(en) als Beleg(e) wiederherstellen?`))return;
+    for(const id of ids){const f=blobMap.get(id);let prev=null;if(f&&f.mime==='application/pdf'&&f.blob){try{const doc=await openPdf(f.blob);prev=await storeBlob(await renderPdfPage(doc,1,1600),'image/jpeg','vorschau.jpg','',{pages:doc.numPages})}catch(e){console.warn(e)}}
+      const b={id:uid(),nr:Math.max(0,...S.belege.map(x=>x.nr))+1,date:today(),supplier:'',desc:(f&&f.name||'').replace(/\.[^.]+$/,''),category:'Material',amount:'',dateAuto:true,by:SES?SES.email:'',fileId:id,previewId:prev?prev.id:(f&&f.mime!=='application/pdf'?id:null)};
+      S.belege.push(b);await dbPut('belege',b)}
+    UI.osel.clear();renderExport();toast(`${ids.length} Beleg(e) wiederhergestellt – Angaben mit ✨ auslesen`,5000)},
   pstMore:()=>{UI.pstN=(UI.pstN||60)+200;const l=$('#pstList');if(l)l.innerHTML=pstList()},
   totals:()=>{$('#totBody').innerHTML=`<h2 style="margin:0 0 10px">Kostenübersicht</h2>${costHtml()}`;$('#totDlg').hidden=false;updTotBtn()},
   totClose:(id,a,e)=>{if(e&&e.target.closest('.totbox')&&!e.target.closest('[data-act="totClose"].b'))return;$('#totDlg').hidden=true},
@@ -1855,8 +1884,9 @@ async function api(path,opt={}){await ensureToken();
   const r=await fetch(CFG.url+path,Object.assign({},opt,{headers:Object.assign({apikey:CFG.key,Authorization:'Bearer '+SES.access_token},opt.headers||{})}));
   if(r.status===401){SES.expires_at=0;saveSes();throw new Error('Sitzung abgelaufen')}
   if(!r.ok){const t=await r.text().catch(()=>'');throw new Error(`Server ${r.status}: ${t.slice(0,160)}`)}return r}
-async function upsertItems(rows){if(!rows.length)return;
-  await api(`/rest/v1/${APP.table}?on_conflict=id`,{method:'POST',headers:{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)})}
+async function upsertItems(rows,ret){if(!rows.length)return [];
+  const r=await api(`/rest/v1/${APP.table}?on_conflict=id${ret?'&select=id,updated_at':''}`,{method:'POST',headers:{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,'+(ret?'return=representation':'return=minimal')},body:JSON.stringify(rows)});
+  if(!ret)return [];try{return await r.json()}catch(_){return []}}
 async function dequeueIf(e){await tx('queue','readwrite',st=>{const g=st.get(e.id);g.onsuccess=()=>{if(g.result&&g.result.t===e.t)st.delete(e.id)}})}
 const queueCount=async()=>(await dbAll('queue')).length;
 function localRec(store,id){if(store==='kv')return id==='project'?S.project:null;return (S[store]||[]).find(x=>x.id===id)||null}
@@ -1873,13 +1903,58 @@ async function push(){
     if(e.op==='put'){if(rec&&rec.blob){setSync('busy',`Lade Dateien hoch (${++n}/${tot}) …`);
         await api(`/storage/v1/object/${APP.bucket}/${e.recId}`,{method:'POST',headers:{'x-upsert':'true','Content-Type':rec.mime||'application/octet-stream'},body:rec.blob});
         await upsertItems([{id:e.recId,kind:'blob',data:blobMeta(rec),deleted:false}])}}
-    else{try{await api(`/storage/v1/object/${APP.bucket}/${e.recId}`,{method:'DELETE'})}catch(_){}
+    else{/* Datei bleibt im Speicher – nur der Eintrag wird als gelöscht markiert */
       await upsertItems([{id:e.recId,kind:'blob',data:null,deleted:true}])}
     await dequeueIf(e)}
   const rest=q.filter(e=>e.store!=='blobs');
-  for(let i=0;i<rest.length;i+=200){const ch=rest.slice(i,i+200);
-    await upsertItems(ch.map(e=>{const rec=e.op==='put'?localRec(e.store,e.recId):null;return {id:e.recId,kind:SYNC_KIND[e.store],data:rec,deleted:!rec}}));
-    for(const e of ch)await dequeueIf(e)}}
+  for(let i=0;i<rest.length;i+=150){const ch=rest.slice(i,i+150),rows=[],keep=[];
+    /* Aktuellen Cloud-Stand dieser Datensätze holen: wurde er seit unserem letzten Stand von einem anderen Gerät geändert, wird zusammengeführt statt überschrieben */
+    const rem=new Map();try{const rr=await (await api(`/rest/v1/${APP.table}?select=id,kind,data,deleted,updated_at&id=in.(${ch.map(e=>encodeURIComponent(e.recId)).join(',')})`)).json();for(const r of rr)rem.set(r.id,r)}catch(e){console.warn(e);throw e}
+    for(const e of ch){let rec=e.op==='put'?localRec(e.store,e.recId):null;const rm=rem.get(e.recId),base=SYNCBASE[e.recId],conflict=!!rm&&rm.updated_at!==base;
+      if(conflict){
+        if(!rec){if(!rm.deleted){await applyRemote(Object.assign({},rm,{kind:SYNC_KIND[e.store]}),new Set());SYNCBASE[rm.id]=rm.updated_at;keep.push(e);continue}}   // lokal gelöscht, anderswo geändert: Cloud-Stand behalten
+        else if(!rm.deleted&&rm.data&&e.store!=='kv'){rec=mergeRec(e.store,rm.data,rec);await rawPut(e.store,rec);const arr=S[e.store];if(arr){const k=arr.findIndex(x=>x.id===rec.id);if(k>=0)arr[k]=rec}mergedN++}
+        else if(!rm.deleted&&rm.data&&e.store==='kv'){rec=mergeRec('kv',rm.data,rec);Object.assign(S.project,rec);await rawPut('kv',S.project);rec=S.project}}
+      rows.push({id:e.recId,kind:SYNC_KIND[e.store],data:rec,deleted:!rec})}
+    const back=await upsertItems(rows,true);for(const r of back||[])SYNCBASE[r.id]=r.updated_at;
+    for(const e of ch)await dequeueIf(e)}
+  await saveBase();if(mergedN){softRender();toast(`${mergedN} Datensatz/-sätze mit Änderungen eines anderen Geräts zusammengeführt`,4000);mergedN=0}}
+let SYNCBASE={},mergedN=0,baseT=null;
+const SNAP_KEEP=15;
+const snapKeys=()=>new Promise(res=>{try{tx('snap','readonly',st=>{const r=st.getAllKeys();r.onsuccess=()=>res((r.result||[]).map(k=>({id:k,t:+String(k).slice(1)})));r.onerror=()=>res([])})}catch(_){res([])}});
+let lastSnapT=null;
+async function takeSnap(why){try{if(!(S.pins.length||S.belege.length||S.floors.length))return;
+  if(lastSnapT===null){const ks=await snapKeys();lastSnapT=ks.reduce((m,k)=>Math.max(m,k.t||0),0)}
+  if(why!=='manual'&&Date.now()-lastSnapT<2*3600e3)return;const t=Date.now();lastSnapT=t;const all=await snapKeys();
+  await rawPut('snap',{id:'s'+t,t,why:why||'',project:S.project,floors:S.floors,buildings:S.buildings,pins:S.pins,belege:S.belege,articles:S.articles,work:S.work,
+    n:{pins:S.pins.length,belege:S.belege.length,fotos:S.pins.reduce((x,p)=>x+pinPhotos(p).length,0),entries:S.pins.reduce((x,p)=>x+p.entries.length,0)}});
+  for(const o of all.sort((a,b)=>b.t-a.t).slice(SNAP_KEEP-1))await rawDel('snap',o.id)}catch(e){console.warn('Sicherungspunkt',e)}}
+async function restoreSnap(id){const sn=(await dbAll('snap')).find(x=>x.id===id);if(!sn)return;
+  if(!confirm(`Sicherungspunkt vom ${new Date(sn.t).toLocaleString('de-CH')} zurückholen?\n\n${sn.n.pins} Pins · ${sn.n.entries} Einträge · ${sn.n.fotos} Fotos · ${sn.n.belege} Belege\n\nFehlende Pins, Einträge, Fotos und Belege werden ergänzt. Was seither neu erfasst wurde, bleibt erhalten.`))return;
+  await takeSnap('manual');let n=0;
+  for(const st of ['floors','buildings','pins','belege','articles','work']){for(const r of sn[st]||[]){const cur=(S[st]||[]).find(x=>x.id===r.id);const rec=cur?mergeRec(st,r,cur):JSON.parse(JSON.stringify(r));
+    if(cur&&JSON.stringify(cur)===JSON.stringify(rec))continue;if(st==='pins')normPin(rec);if(cur)S[st][S[st].indexOf(cur)]=rec;else S[st].push(rec);await dbPut(st,rec);n++}}
+  if(sn.project){const pr=mergeRec('kv',sn.project,S.project);Object.assign(S.project,pr);await dbPut('kv',S.project);loadGw()}
+  render();toast(`✓ ${n} Datensätze aus dem Sicherungspunkt ergänzt – werden jetzt synchronisiert`,6000)}
+async function saveBase(){try{await rawPut('kv',{id:'syncbase',m:SYNCBASE})}catch(e){console.warn(e)}}
+/* Zusammenführen: lokal hat Vorrang, aber nichts vom anderen Gerät geht verloren (Einträge, Fotos, Belege, Positionen werden vereinigt) */
+const uni=(a,b)=>{const o=[...(a||[])];for(const x of b||[])if(!o.includes(x))o.push(x);return o};
+const empty=v=>v===undefined||v===null||v===''||(Array.isArray(v)&&!v.length);
+function fillGaps(l,r){for(const k in r)if(empty(l[k])&&!empty(r[k]))l[k]=r[k];return l}
+function mergeRec(store,remote,local){const L=JSON.parse(JSON.stringify(local)),Rm=JSON.parse(JSON.stringify(remote||{}));
+  if(store==='pins'){fillGaps(L,Object.assign({},Rm,{entries:undefined}));const re=new Map((Rm.entries||[]).map(e=>[e.id,e]));
+    for(const e of L.entries||[]){const r=re.get(e.id);if(!r)continue;re.delete(e.id);
+      e.photoIds=uni(e.photoIds,r.photoIds);e.belegIds=uni(e.belegIds,r.belegIds);e.belegGw=Object.assign({},r.belegGw||{},e.belegGw||{});e.tags=uni(e.tags,r.tags);
+      e.gwText=Object.assign({},r.gwText||{},e.gwText||{});for(const k in r.gwText||{})if(empty(e.gwText[k]))e.gwText[k]=r.gwText[k];
+      const ms=new Set((e.mats||[]).map(m=>JSON.stringify(m)));e.mats=[...(e.mats||[]),...(r.mats||[]).filter(m=>!ms.has(JSON.stringify(m))&&!(e.mats||[]).some(x=>x.code===m.code&&x.name===m.name))];
+      if((e.open||[]).length===0&&(r.open||[]).length)e.open=r.open;if((e.knicks||[]).length===0&&(r.knicks||[]).length)e.knicks=r.knicks;
+      fillGaps(e,Object.assign({},r,{photoIds:undefined,belegIds:undefined,belegGw:undefined,tags:undefined,gwText:undefined,mats:undefined}))}
+    L.entries=[...(L.entries||[]),...re.values()];return L}
+  if(store==='belege'){fillGaps(L,Object.assign({},Rm,{items:undefined}));const ids=new Set((L.items||[]).map(it=>it.id));L.items=[...(L.items||[]),...(Rm.items||[]).filter(it=>!ids.has(it.id))];
+    L.split=Object.assign({},Rm.split||{},L.split||{});L.notDup=uni(L.notDup,Rm.notDup);L.itemLinks=uni(L.itemLinks,Rm.itemLinks);if(!L.items.length)delete L.items;return L}
+  if(store==='floors'){fillGaps(L,Object.assign({},Rm,{rooms:undefined}));const ids=new Set((L.rooms||[]).map(r=>r.id));L.rooms=[...(L.rooms||[]),...(Rm.rooms||[]).filter(r=>!ids.has(r.id))];return L}
+  if(store==='kv'){fillGaps(L,Rm);if(Array.isArray(Rm.costs)){const ks=new Set((L.costs||[]).map(c=>c.k));L.costs=[...(L.costs||[]),...Rm.costs.filter(c=>!ks.has(c.k))]}return L}
+  return fillGaps(L,Rm)}
 async function applyRemote(r,pending){
   const store=STORE_OF[r.kind];if(!store||pending.has(store+'|'+r.id))return false;
   if(store==='blobs'){const ex=blobMap.get(r.id);
@@ -1888,16 +1963,17 @@ async function applyRemote(r,pending){
   if(store==='kv'){if(r.deleted||!r.data)return false;if(JSON.stringify(S.project)===JSON.stringify(r.data))return false;S.project=Object.assign({id:'project'},r.data);loadGw();await rawPut('kv',S.project);return true}
   const arr=S[store],i=arr.findIndex(x=>x.id===r.id);
   if(r.deleted){if(i<0)return false;arr.splice(i,1);await rawDel(store,r.id);return true}
-  const d=r.data;if(!d)return false;if(store==='pins')normPin(d);if(store==='pins'||store==='belege')renameGw(d);
+  const d=r.data;if(!d)return false;if(store==='pins'){normPin(d);if(APP.dates&&!d.ord){d.entries.sort((a,b)=>(a.date||'').localeCompare(b.date||''));d.ord=1}d.entries.forEach((e,i)=>{if(e.name===undefined)e.name=ENT_DEF[i]||''})}if(store==='pins'||store==='belege')renameGw(d);
   if(i>=0&&JSON.stringify(arr[i])===JSON.stringify(d))return false;
   if(i>=0)arr[i]=d;else arr.push(d);await rawPut(store,d);return true}
 async function pull(){
+  await takeSnap('sync');
   const since=SYNCMETA.lastPull?new Date(new Date(SYNCMETA.lastPull).getTime()-60000).toISOString():null;
   const pending=new Set((await dbAll('queue')).map(e=>e.id));let off=0,maxT=SYNCMETA.lastPull,changed=false,skipMin=null;
   for(;;){const rows=await (await api(`/rest/v1/${APP.table}?select=id,kind,data,deleted,updated_at${since?'&updated_at=gt.'+encodeURIComponent(since):''}&order=updated_at.asc,id.asc&limit=1000&offset=${off}`)).json();
-    for(const r of rows){if(!maxT||new Date(r.updated_at)>new Date(maxT))maxT=r.updated_at;const k=(STORE_OF[r.kind]||'')+'|'+r.id;if(!pending.has(k)&&recentlyTouched(k)){if(!skipMin||new Date(r.updated_at)<new Date(skipMin))skipMin=r.updated_at;continue}if(await applyRemote(r,pending))changed=true}
+    for(const r of rows){if(!maxT||new Date(r.updated_at)>new Date(maxT))maxT=r.updated_at;const k=(STORE_OF[r.kind]||'')+'|'+r.id;if(!pending.has(k)&&recentlyTouched(k)){if(!skipMin||new Date(r.updated_at)<new Date(skipMin))skipMin=r.updated_at;continue}if(!pending.has(k))SYNCBASE[r.id]=r.updated_at;if(await applyRemote(r,pending))changed=true}
     if(rows.length<1000)break;off+=1000}
-  SYNCMETA.lastPull=skipMin?new Date(new Date(skipMin).getTime()-1).toISOString():maxT;await rawPut('kv',SYNCMETA);
+  SYNCMETA.lastPull=skipMin?new Date(new Date(skipMin).getTime()-1).toISOString():maxT;await rawPut('kv',SYNCMETA);await saveBase();
   if(changed){if(!curFloor())UI.floor=firstFloorId();softRender()}}
 let dlRunning=false;
 async function downloadMissing(){if(dlRunning)return;dlRunning=true;let n=0,last=Date.now();
@@ -1916,7 +1992,7 @@ function setSync(st,label){SSTATE=st;const b=$('#syncBtn');if(!b)return;b.classN
 async function syncNow(manual){if(!cloudOn()||!SES)return;if(syncing){syncAgain=true;return}
   if(!navigator.onLine){setSync('off');if(manual)toast('Keine Internetverbindung');return}
   syncing=true;setSync('busy');
-  try{await firstUpload();await push();await pull();const q=await queueCount();setSync(q?'pend':'ok');if(manual)toast(q?'Noch nicht alles hochgeladen':'Alles synchronisiert')}
+  try{await firstUpload();await pull();await push();const q=await queueCount();setSync(q?'pend':'ok');if(manual)toast(q?'Noch nicht alles hochgeladen':'Alles synchronisiert')}
   catch(e){console.warn(e);lastErr=e.message;setSync(e instanceof TypeError||!navigator.onLine?'off':'err');if(manual)toast(syncText(),5000)}
   finally{syncing=false;if(syncAgain){syncAgain=false;setTimeout(()=>syncNow(),800)}}
   downloadMissing()}
@@ -1937,11 +2013,12 @@ async function logout(){const q=await queueCount();
   try{await openDB()}catch(e){document.body.innerHTML='<p style="padding:40px">Der Browser erlaubt hier keine lokale Datenbank. Bitte die Datei mit Chrome oder Safari öffnen.</p>';return}
   const [kv,f,p,b,bl,bd,ar,wk]=await Promise.all(['kv','floors','pins','belege','blobs','buildings','articles','work'].map(dbAll));
   const pr=kv.find(x=>x.id==='project');if(pr)S.project=Object.assign(S.project,pr);
-  SYNCMETA=kv.find(x=>x.id==='sync')||{id:'sync',lastPull:null,initialized:false};
+  SYNCMETA=kv.find(x=>x.id==='sync')||{id:'sync',lastPull:null,initialized:false};SYNCBASE=(kv.find(x=>x.id==='syncbase')||{}).m||{};
   S.floors=f;S.buildings=bd;S.articles=ar;S.work=wk;S.pins=p;S.belege=b;S.blobs=bl;bl.forEach(x=>blobMap.set(x.id,x));
   S.pins.forEach(normPin);loadGw();
-  for(const x of S.pins){let ch=renameGw(x);if(APP.dates&&!x.ord){x.entries.sort((a,b)=>(a.date||'').localeCompare(b.date||''));x.ord=1;ch=true}x.entries.forEach((e,i)=>{if(e.name===undefined){e.name=ENT_DEF[i]||'';ch=true}});if(ch)await dbPut('pins',x)}for(const x of S.belege)if(renameGw(x))await dbPut('belege',x);
+  for(const x of S.pins){let ch=renameGw(x);if(APP.dates&&!x.ord){x.entries.sort((a,b)=>(a.date||'').localeCompare(b.date||''));x.ord=1;ch=true}x.entries.forEach((e,i)=>{if(e.name===undefined){e.name=ENT_DEF[i]||'';ch=true}});if(ch)await rawPut('pins',x)}for(const x of S.belege)if(renameGw(x))await rawPut('belege',x);
   UI.floor=firstFloorId();
+  await takeSnap('start');
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
   if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js?app='+APP.id).catch(e=>console.warn(e));
   render();
