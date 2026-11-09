@@ -553,7 +553,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='36 (09.11.2026, Beleg-Status mit Farben in der Auswahl)';
+const APP_VERSION='37 (09.11.2026, Positionen auf mehrere Pins)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -761,6 +761,10 @@ const isGen=k=>!!k&&genList().some(g=>g.k===k);
 const genGuess=name=>/entsorg|mulde|deponie|kehricht|sperrgut|bauschutt|abfall|recycling|containermiete|gebinde.*entsorg/i.test(name||'')?'entsorgung':'';
 /* Beleg-Zuordnung: b.cost (Kostenstelle) ODER Beleg-Pins (verknüpft, ohne die nur durch Positionen verknüpften b.itemLinks).
    Positionen mit it.pin='' erben die Beleg-Zuordnung (bei mehreren Pins nach Fläche); eigene Zuordnung überschreibt. */
+/* Position → mehrere Pins: it.pin='m' + it.pins=[Pin-IDs] (Aufteilung nach Fläche wie beim ganzen Beleg) */
+const itPinIds=it=>{if(!it)return [];if(it.pin==='m')return (it.pins||[]).filter(id=>pinById(id));return it.pin&&!isGen(it.pin)&&pinById(it.pin)?[it.pin]:[]};
+function setItPins(it,ids){ids=[...new Set(ids)].filter(id=>pinById(id));delete it.pins;if(!ids.length)it.pin='';else if(ids.length===1)it.pin=ids[0];else{it.pin='m';it.pins=ids}}
+const itTargetTxt=it=>{if(isGen(it.pin))return genList().find(g=>g.k===it.pin).n;const ps=itPinIds(it).map(pinById);return ps.length?'Pin '+ps.map(p=>p.nr).join(', '):''};
 const belegPins=b=>S.pins.filter(p=>pinBelegIds(p).includes(b.id)&&!(b.itemLinks||[]).includes(p.id));
 const belegCost=b=>isGen(b.cost)?b.cost:'';
 function belegBreakdown(b){const pins=S.pins.filter(p=>pinBelegIds(p).includes(b.id)),amt=+b.amount||0,m=new Map(),
@@ -768,8 +772,8 @@ function belegBreakdown(b){const pins=S.pins.filter(p=>pinBelegIds(p).includes(b
   const its=(b.items||[]).filter(it=>it.amount!==''&&it.amount!=null&&+it.amount),bc=belegCost(b),bp=bc?[]:belegPins(b);
   const addGen=(k,v)=>{res.gen[k]=c2((res.gen[k]||0)+v);if(k===ALLG)res.allg=res.gen[k]};
   if(its.length){res.hasItems=true;const base=new Map();let sumI=0;
-    for(const it of its){const a=+it.amount;sumI=c2(sumI+a);const own=isGen(it.pin)?it.pin:(it.pin&&pinById(it.pin)?it.pin:'');let im=new Map(),inh=!own;
-      if(own)im.set(own,a);else if(bc)im.set(bc,a);else if(bp.length){const r=distribute(a,bp,b,new Map());im=r.out;res.area=res.area||r.area}
+    for(const it of its){const a=+it.amount;sumI=c2(sumI+a);const ips=isGen(it.pin)?[]:itPinIds(it),own=isGen(it.pin)?it.pin:(ips.length===1?ips[0]:'');let im=new Map(),inh=!own&&ips.length<2;
+      if(ips.length>1){const r=distribute(a,ips.map(pinById),b,new Map());im=r.out;res.area=res.area||r.area}else if(own)im.set(own,a);else if(bc)im.set(bc,a);else if(bp.length){const r=distribute(a,bp,b,new Map());im=r.out;res.area=res.area||r.area}
       if(!im.size){res.open=c2(res.open+a);res.openN++}for(const [k,v] of im)base.set(k,c2((base.get(k)||0)+v));res.items.push({it,k:own||(im.size===1?[...im.keys()][0]:''),m:im,inh})}
     res.rest=c2(amt-sumI);const bt=[...base.values()].reduce((x,y)=>x+y,0),keys=[...base.keys()];let acc=0;res.bt=bt;
     keys.forEach((k,i)=>{const r=!res.rest||!bt?0:(i===keys.length-1?c2(res.rest-acc):c2(res.rest*base.get(k)/bt));acc=c2(acc+r);res.restMap.set(k,r);
@@ -1003,10 +1007,10 @@ async function movePhotosTo(p){const a=asgPhotos();if(!a)return;const src=a.from
   if(se)se.photoIds=se.photoIds.filter(id=>!ids.includes(id));for(const id of ids)if(!te.photoIds.includes(id))te.photoIds.push(id);
   if(src)await dbPut('pins',src);await dbPut('pins',p);UI.assign=null;UI.floor=p.floorId;UI.pin=p.id;UI.entry=te.id;renderPlan();
   toast(`${ids.length} Foto(s) nach Pin ${p.nr}${p.title?' '+p.title:''} («${entLabel(p,te)}») verschoben`,3500)}
-function asgIsOn(p){const a=UI.assign,b=asgBeleg();if(asgPhotos())return false;if(!b)return false;if(a.ii!=null){const it=(b.items||[])[a.ii];return !!it&&it.pin===p.id}return belegPins(b).some(x=>x.id===p.id)}
+function asgIsOn(p){const a=UI.assign,b=asgBeleg();if(asgPhotos())return false;if(!b)return false;if(a.ii!=null){const it=(b.items||[])[a.ii];return itPinIds(it).includes(p.id)}return belegPins(b).some(x=>x.id===p.id)}
 async function asgToggle(p){if(asgPhotos())return movePhotosTo(p);const a=UI.assign,b=asgBeleg();if(!b)return;
-  if(a.ii!=null){const it=(b.items||[])[a.ii];if(!it)return;const old=it.pin;it.pin=p.id;await syncItemLinks(b,old);await dbPut('belege',b);
-    toast(`${itemNo(b,a.ii)} «${it.name||'Position'}» → Pin ${p.nr}${p.title?' '+p.title:''}`,3000);ACT.asgDone();return}
+  if(a.ii!=null){const it=(b.items||[])[a.ii];if(!it)return;const cur=itPinIds(it),on=cur.includes(p.id);setItPins(it,on?cur.filter(x=>x!==p.id):[...cur,p.id]);
+    await syncItemLinks(b,'');await dbPut('belege',b);toast(`Pin ${p.nr} ${on?'entfernt':'zugeordnet'}`,1800);renderStage();renderPinPanel();return}
   const e=entryWithBeleg(p,b.id);if(b.cost){b.cost='';await dbPut('belege',b)}
   if(e&&(b.itemLinks||[]).includes(p.id)){b.itemLinks=b.itemLinks.filter(x=>x!==p.id);await dbPut('belege',b);toast(`Pin ${p.nr} zugeordnet`,1800)}
   else if(e){await unlinkBeleg(p,e,b.id);toast(`Pin ${p.nr} entfernt`,1800)}
@@ -1014,7 +1018,10 @@ async function asgToggle(p){if(asgPhotos())return movePhotosTo(p);const a=UI.ass
   renderStage();renderPinPanel()}
 function asgPanel(){const b=asgBeleg(),a=UI.assign,fn=id=>floorLabel(floorById(id));if(!b)return '';
   if(a.ii!=null){const it=(b.items||[])[a.ii]||{};return `<div class="asgp"><div class="lbl">Position zuordnen</div><h3>${itemNo(b,a.ii)} ${esc(it.name||'')}</h3><p class="mut">CHF ${it.amount===''||it.amount==null?'–':chf(it.amount)} · aus ${esc(belegLabel(b))}</p>
-    <p>👉 Tippe im Grundriss auf den <b>Pin</b>, zu dem diese Position gehört. Geschoss links wechseln.</p><button class="b" data-act="asgDone">Abbrechen</button></div>`}
+    <p>👉 Tippe im Grundriss auf alle <b>Pins</b>, zu denen diese Position gehört. Nochmals tippen entfernt den Pin. Geschoss links wechseln.</p>
+    ${(()=>{const ps=itPinIds(it).map(pinById);if(!ps.length)return `<p class="mut">${isGen(it.pin)?'Zurzeit: '+esc(itTargetTxt(it))+' – ein Pin ersetzt das.':'Noch kein Pin gewählt'+(belegTargetTxt(b)?' – folgt dem Beleg ('+esc(belegTargetTxt(b))+').':'.')}</p>`;
+      const inf=belegBreakdown(b).items.find(x=>x.it===it),m=inf?inf.m:new Map();return `<table class="asgt"><tbody>${ps.map(p=>`<tr><td><b>${esc(fn(p.floorId))} ${p.nr}</b> ${esc(p.title||'')}</td><td class="r">${chf(m.get(p.id)||0)}</td></tr>`).join('')}</tbody></table>${ps.length>1?'<p class="mut" style="font-size:12px">'+(ps.every(p=>pinAreaFor(p,b)>0)?'nach Fläche aufgeteilt':'gleichmässig aufgeteilt (Fläche fehlt)')+'</p>':''}`})()}
+    <button class="b p" data-act="asgDone" style="width:100%">✓ Fertig</button></div>`}
   const pins=belegPins(b),sh=belegShares(b),ni=(b.items||[]).length,nInh=(b.items||[]).filter(it=>!it.pin).length;
   return `<div class="asgp"><div class="lbl">Beleg zuordnen</div><h3>${esc(belegLabel(b))}</h3>${ni?`<p class="mut" style="font-size:12.5px">${nInh} von ${ni} Positionen folgen dieser Zuordnung, die übrigen haben eine eigene.</p>`:''}
     <p>👉 Tippe im Grundriss auf alle <b>Pins</b>, die zu diesem Beleg gehören. Nochmals tippen entfernt den Pin. Geschoss links wechseln.</p>
@@ -1217,29 +1224,29 @@ async function applyGwMap(MAP){for(const x of S.pins)if(renameGw(x,MAP))await db
   for(const k of ['gf','pf','fg'])if(MAP[UI[k]]!==undefined)UI[k]=MAP[UI[k]];if(UI.bfl&&MAP[UI.bfl.gw]!==undefined)UI.bfl.gw=MAP[UI.bfl.gw];if(MAP[UI.opts.gw]!==undefined)UI.opts.gw=MAP[UI.opts.gw]}
 const gwPalette=['#0891b2','#65a30d','#ea580c','#7c3aed','#be123c','#0f766e','#a16207','#4338ca','#15803d','#b91c1c'];
 /* Position einem Pin zugeordnet → Beleg hängt automatisch im Material-Eintrag dieses Pins; nicht mehr gebraucht → wieder lösen */
-async function syncItemLinks(b,old){b.itemLinks=b.itemLinks||[];const want=new Set((b.items||[]).map(it=>it.pin).filter(v=>v&&!isGen(v)&&pinById(v)));
+async function syncItemLinks(b,old){b.itemLinks=b.itemLinks||[];const want=new Set((b.items||[]).flatMap(itPinIds));
   for(const pid of want){const p=pinById(pid);if(pinBelegIds(p).includes(b.id))continue;const e=p.entries.find(x=>isMatEntry(x))||lastEntry(p);if(!e)continue;await linkBeleg(p,e,b.id,b.gewerk||'');if(!b.itemLinks.includes(pid))b.itemLinks.push(pid)}
   for(const pid of [...b.itemLinks])if(!want.has(pid)){const p=pinById(pid),e=p&&entryWithBeleg(p,b.id);if(e)await unlinkBeleg(p,e,b.id);b.itemLinks=b.itemLinks.filter(x=>x!==pid)}}
 function pdfItemRows(b,pid){const br=belegBreakdown(b);if(!br.hasItems)return '';
   return br.items.filter(x=>x.m&&x.m.has(pid)).map(x=>`<tr class="bip"><td></td><td colspan="4">↳ ${itemNo(b,(b.items||[]).indexOf(x.it))} ${esc(x.it.name)}${x.it.qty?' · '+esc(x.it.qty):''}</td><td class="r">${chf(x.it.amount)}</td><td class="r">${x.m.size>1?chf(x.m.get(pid)):''}</td></tr>`).join('')
     +(br.restMap.get(pid)?`<tr class="bip"><td></td><td colspan="4">↳ Anteil Rest (MWST/Rundung/Rabatt)</td><td class="r">${chf(br.restMap.get(pid))}</td><td class="r"></td></tr>`:'')}
 const belegTargetTxt=b=>{const bc=belegCost(b);if(bc)return genList().find(g=>g.k===bc).n;const bp=belegPins(b),fn=id=>floorLabel(floorById(id));return bp.length?bp.map(p=>fn(p.floorId)+' '+p.nr).join(', '):''};
-const itemPinSel=(b,i,it)=>{const v=it.pin||'',tt=belegTargetTxt(b);return `<select data-bi="pin" data-b="${b.id}" data-ii="${i}" class="${v||tt?'':'open'} ${v?'own':''}"><option value="" ${v?'':'selected'}>${tt?'wie Beleg → '+esc(tt):'– zuordnen –'}</option><optgroup label="Kostenstellen">${genList().map(g=>`<option value="${g.k}" ${v===g.k?'selected':''}>${esc(g.n)}</option>`).join('')}<option value="__new">+ Neue Kostenstelle …</option></optgroup>
+const itemPinSel=(b,i,it)=>{const v=it.pin||'',tt=belegTargetTxt(b);return `<select data-bi="pin" data-b="${b.id}" data-ii="${i}" class="${v||tt?'':'open'} ${v?'own':''}"><option value="" ${v?'':'selected'}>${tt?'wie Beleg → '+esc(tt):'– zuordnen –'}</option>${v==='m'?`<option value="m" selected>Mehrere: ${esc(itTargetTxt(it))} (nach Fläche)</option>`:''}<option value="__multi">📍 Mehrere Pins im Grundriss wählen …</option><optgroup label="Kostenstellen">${genList().map(g=>`<option value="${g.k}" ${v===g.k?'selected':''}>${esc(g.n)}</option>`).join('')}<option value="__new">+ Neue Kostenstelle …</option></optgroup>
   ${orderedFloors().map(f=>{const ps=pinsOf(f.id);return ps.length?`<optgroup label="${esc(floorLabel(f))}">${ps.map(p=>`<option value="${p.id}" ${v===p.id?'selected':''}>${p.nr}${p.title?' – '+esc(p.title):''}</option>`).join('')}</optgroup>`:''}).join('')}</select>`};
 function itemsRow(b,pins){const br=belegBreakdown(b),its=b.items||[],sumI=c2(its.reduce((x,y)=>x+(+y.amount||0),0));
   return `<tr class="bitems"><td></td><td colspan="9"><table class="bit"><thead><tr><th>Nr.</th><th>Artikel</th><th>Menge</th><th class="r">CHF</th><th>gehört zu</th><th class="r">inkl. Rest</th><th></th></tr></thead><tbody>
     ${its.map((it,i)=>{const inf=br.items.find(x=>x.it===it),rs=br.rest&&br.bt&&inf&&inf.m&&inf.m.size?br.rest*(+it.amount)/br.bt:0,mine=rs?c2(+it.amount+rs):'';
       return `<tr><td class="mut">${itemNo(b,i)}</td><td><input data-bi="name" data-b="${b.id}" data-ii="${i}" value="${esc(it.name)}" class="${b.auto&&b.auto.items?'auto':''}"></td>
       <td><input data-bi="qty" data-b="${b.id}" data-ii="${i}" value="${esc(it.qty||'')}" style="width:70px"></td><td><input class="r" data-bi="amount" data-b="${b.id}" data-ii="${i}" inputmode="decimal" value="${it.amount===''||it.amount==null?'':chf(it.amount)}" style="width:80px"></td>
-      <td style="white-space:nowrap">${itemPinSel(b,i,it)} <button class="b sm" data-act="asgStart" data-id="${b.id}" data-ii="${i}" title="Im Grundriss den Pin antippen">📍</button></td><td class="r mut" style="font-size:11.5px">${mine!==''&&rs?chf(mine):''}</td><td><button class="b d sm" data-act="rmItem" data-id="${b.id}" data-ii="${i}">×</button></td></tr>`}).join('')}
+      <td style="white-space:nowrap">${itemPinSel(b,i,it)} <button class="b sm" data-act="asgStart" data-id="${b.id}" data-ii="${i}" title="Im Grundriss einen oder mehrere Pins antippen">📍</button></td><td class="r mut" style="font-size:11.5px">${mine!==''&&rs?chf(mine):''}</td><td><button class="b d sm" data-act="rmItem" data-id="${b.id}" data-ii="${i}">×</button></td></tr>`}).join('')}
     ${its.length?`<tr class="sum"><td></td><td>Summe Positionen</td><td></td><td class="r">${chf(sumI)}</td><td colspan="3" class="mut">${b.amount===''||b.amount==null?'':(Math.abs(c2((+b.amount||0)-sumI))>0.004?`Beleg ${chf(b.amount)} · <b class="${Math.abs(c2((+b.amount||0)-sumI))>(+b.amount||0)*.2?'bad':''}">Rest ${chf(c2((+b.amount||0)-sumI))}</b> (MWST/Rundung/Rabatt) wird anteilig auf die Positionen verteilt`:'✓ entspricht dem Belegbetrag')}${br.openN?` · <b class="bad">${br.openN} Position(en) noch nicht zugeordnet</b>`:''}</td></tr>`:''}</tbody></table>
     <div class="mbtns" style="margin:6px 0 2px"><button class="b sm" data-act="addItem" data-id="${b.id}">+ Position</button>${(b.items||[]).some(it=>it.pin)&&belegTargetTxt(b)?`<button class="b sm" data-act="itemsFollow" data-id="${b.id}" title="Alle Positionen übernehmen die Zuordnung des Belegs">↺ Alle wie Beleg (${esc(belegTargetTxt(b))})</button>`:''}<button class="b sm" data-act="readItems" data-id="${b.id}">✨ Positionen aus Beleg lesen</button><button class="b sm" data-act="openBeleg" data-id="${b.id}">🔍 Beleg ansehen</button></div></td></tr>`}
 /* Ganzer Beleg → Kostenstelle: Beleg-Pins (nicht die der Positionen) werden gelöst */
 /* Positionen mit eigener Zuordnung wieder dem Beleg folgen lassen */
 async function itemsFollowBeleg(b,ask){const own=(b.items||[]).filter(it=>it.pin);if(!own.length)return false;
-  if(ask){const tt=belegTargetTxt(b);if(!tt)return false;const n=(b.items||[]).length,names=[...new Set(own.map(it=>isGen(it.pin)?genList().find(g=>g.k===it.pin).n:'Pin '+((pinById(it.pin)||{}).nr||'?')))].join(', ');
+  if(ask){const tt=belegTargetTxt(b);if(!tt)return false;const n=(b.items||[]).length,names=[...new Set(own.map(it=>itTargetTxt(it)||'?'))].join(', ');
     if(!confirm(`${own.length} von ${n} Position(en) haben eine eigene Zuordnung (${names}) und folgen deshalb «${tt}» nicht.\n\nSollen jetzt alle Positionen dem Beleg folgen?\n(Einzelne kannst du danach wieder ändern.)`))return false}
-  for(const it of own)it.pin='';await syncItemLinks(b,'');await dbPut('belege',b);return true}
+  for(const it of own){it.pin='';delete it.pins}await syncItemLinks(b,'');await dbPut('belege',b);return true}
 async function setBelegCost(b,k){for(const p of belegPins(b)){const e=entryWithBeleg(p,b.id);if(e)await unlinkBeleg(p,e,b.id)}b.cost=k;await dbPut('belege',b);toast(`Beleg → ${genList().find(g=>g.k===k).n}`,2500)}
 async function newCost(nm){const n=(nm!=null?nm:prompt('Name der neuen Kostenstelle (z.B. Gerüst, Transporte, Werkzeugmiete):')||'').trim();if(!n)return '';
   const ex=genList().find(g=>g.n.toLowerCase()===n.toLowerCase());if(ex)return ex.k;
@@ -1556,7 +1563,7 @@ const ACT={
     toast(`✓ Fertig: bei ${ok} von ${L.length} Belegen Material eingetragen – gelb markiert, bitte kurz kontrollieren`,7000)},
   asgStart:(id,a)=>{const b=belegById(id);if(!b)return;const ii=a&&a.dataset.ii!=null&&a.dataset.ii!==''?+a.dataset.ii:null;
     UI.assign={bid:id,ii};UI.pin=null;UI.add=false;UI.tab='plan';
-    const fp=S.pins.find(p=>ii!=null?(b.items[ii]||{}).pin===p.id:pinBelegIds(p).includes(id));if(fp)UI.floor=fp.floorId;else if(!curFloor()||isSite(curFloor())){const f=orderedFloors().find(f=>!isSite(f));if(f)UI.floor=f.id}
+    const fp=S.pins.find(p=>ii!=null?itPinIds(b.items[ii]).includes(p.id):pinBelegIds(p).includes(id));if(fp)UI.floor=fp.floorId;else if(!curFloor()||isSite(curFloor())){const f=orderedFloors().find(f=>!isSite(f));if(f)UI.floor=f.id}
     render()},
   asgDone:async()=>{if(asgPhotos()){const a=asgPhotos();UI.assign=null;if(!a.from){UI.tab='export';render();return}UI.pin=a.from;UI.entry=a.fromE;const sp=pinById(a.from);if(sp)UI.floor=sp.floorId;renderPlan();return}const id=UI.assign&&UI.assign.bid,bb=id&&belegById(id);if(bb&&UI.assign.ii==null&&belegPins(bb).length)await itemsFollowBeleg(bb,true);UI.assign=null;UI.tab='belege';UI.hl=id;if(id){UI.bOpen=UI.bOpen||new Set();if((belegById(id)||{}).items&&belegById(id).items.length)UI.bOpen.add(id)}render()},
   itemsFollow:async id=>{const b=belegById(id);if(!b)return;if(await itemsFollowBeleg(b,false)){renderBelege();toast('Alle Positionen folgen jetzt dem Beleg',2500)}},
@@ -1662,7 +1669,7 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
     const n=t.value.trim();if(n===g.n)return;if(!n||l.some((x,k)=>k!==i&&x.n.toLowerCase()===n.toLowerCase())){toast(n?'Dieses Gewerk gibt es schon':'Name darf nicht leer sein',3000);t.value=g.n;return}
     const old=g.n;g.n=n;await applyGwMap({[old]:n});await saveGwList(l);renderExport();toast(`«${old}» umbenannt in «${n}» – bestehende Einträge angepasst`,4000);return}
   if(d.bi){const b=belegById(d.b);if(!b||!b.items)return;const it=b.items[+d.ii];if(!it)return;
-    if(d.bi==='amount'){it.amount=parseAmount(t.value)}else if(d.bi==='pin'){let v=t.value;if(v==='__new'){v=await newCost();if(!v){renderBelege();return}}const old=it.pin;it.pin=v;await syncItemLinks(b,old)}else it[d.bi]=t.value;
+    if(d.bi==='amount'){it.amount=parseAmount(t.value)}else if(d.bi==='pin'){let v=t.value;if(v==='m')return;if(v==='__multi'){ACT.asgStart(b.id,{dataset:{ii:d.ii}});return}if(v==='__new'){v=await newCost();if(!v){renderBelege();return}}const old=it.pin;delete it.pins;it.pin=v;await syncItemLinks(b,old)}else it[d.bi]=t.value;
     if(b.auto&&d.bi!=='pin')b.auto.items=false;await dbPut('belege',b);renderBelege();return}
   if(d.stn||d.stc){const x=stList().find(y=>y.k===(d.stn||d.stc));if(!x)return;
     if(d.stn){const n=t.value.trim();if(!n||stList().some(y=>y.k!==x.k&&y.n.toLowerCase()===n.toLowerCase())){toast(n?'Diesen Namen gibt es schon':'Name darf nicht leer sein',3000);t.value=x.n;return}x.n=n}else x.c=t.value;
