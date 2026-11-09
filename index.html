@@ -268,7 +268,7 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .gwr{display:flex;align-items:center;gap:6px}
 /* Beleg-Status (nur in der App, nicht im Export) */
 select.bst{background:var(--c,#9ca3af);color:#fff;font-weight:600;font-size:12px;border:1px solid var(--c,#9ca3af);border-radius:7px;padding:5px 4px;width:100%;min-width:150px}
-select.bst option{background:#fff;color:#1f2328;font-weight:400}
+select.bst option{font-weight:600}
 .gwr input[data-stn]{flex:1;min-width:0}
 .gwr input[type=color]{width:38px;height:34px;padding:2px;border:1px solid var(--line);border-radius:7px;background:#fff;flex:none}
 .gwr input[data-gwn]{flex:1;min-width:0}
@@ -553,7 +553,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='35 (09.11.2026, Beleg-Status, Pins verschieben, Eintragsfarben)';
+const APP_VERSION='36 (09.11.2026, Beleg-Status mit Farben in der Auswahl)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -750,7 +750,11 @@ const stOf=b=>stList().find(x=>x.k===(b.status||'offen'))||stList()[0];
 async function stSave(x){S.project.bstat=Array.isArray(S.project.bstat)?S.project.bstat:[];const i=S.project.bstat.findIndex(y=>y.k===x.k);const v={k:x.k,n:x.n,c:x.c};if(i<0)S.project.bstat.push(v);else S.project.bstat[i]=Object.assign(S.project.bstat[i],v);await dbPut('kv',S.project)}
 async function newStatus(n){n=(n||prompt('Name des neuen Status:','')||'').trim();if(!n)return '';const ex=stList().find(x=>x.n.toLowerCase()===n.toLowerCase());if(ex)return ex.k;
   const used=new Set(stList().map(x=>x.c)),c=BST_PAL.find(x=>!used.has(x))||BST_PAL[stList().length%BST_PAL.length];const k='s_'+uid();await stSave({k,n,c});toast(`Status «${n}» angelegt`,2500);return k}
-const stSel=b=>{const st=stOf(b);return `<select class="bst" data-bf="status" style="--c:${st.c}">${stList().map(x=>`<option value="${x.k}" ${x.k===st.k?'selected':''}>${esc(x.n)}</option>`).join('')}<option value="__new">+ Neuer Status …</option></select>`};
+const stSel=b=>{const st=stOf(b);return `<select class="bst" data-bf="status" style="--c:${st.c}">${stList().map(x=>`<option value="${x.k}" ${x.k===st.k?'selected':''} style="background:${x.c};color:#fff">${stDot(x.c)} ${esc(x.n)}</option>`).join('')}<option value="__new" style="background:#fff;color:#1f2328">+ Neuer Status …</option></select>`};
+/* farbiger Punkt passend zur Statusfarbe (für Auswahllisten, die keine Hintergrundfarben zeigen, z.B. iPad) */
+function stDot(c){const h=(c||'').replace('#','');if(h.length!==6)return '⚪';const r=parseInt(h.slice(0,2),16)/255,g=parseInt(h.slice(2,4),16)/255,b=parseInt(h.slice(4),16)/255,mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2;
+  if(d<.12)return l<.25?'⚫':'⚪';let hu=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;hu=(hu*60+360)%360;
+  if(l<.32&&hu>15&&hu<50)return '🟤';return hu<15||hu>=330?'🔴':hu<45?'🟠':hu<70?'🟡':hu<170?'🟢':hu<260?'🔵':'🟣'}
 /* eigene Kostenstellen in S.project.costs [{k,n}] – werden mitsynchronisiert */
 const genList=()=>[...GEN_BASE,...(Array.isArray(S.project.costs)?S.project.costs:[]).map(c=>({k:c.k,n:c.n,h:c.n}))];
 const isGen=k=>!!k&&genList().some(g=>g.k===k);
@@ -1301,7 +1305,7 @@ function renderBelege(){
     <span class="sp"></span><span class="sum">${list.length} Beleg(e) · Total CHF <b>${chf(sum)}</b></span></div>
     <div class="drop" id="drop">Fotos oder PDFs von Belegen hierher ziehen – oder oben «+ Fotos / PDFs»</div>
     ${S.belege.length?`<div class="tw"><table class="bt"><thead><tr><th></th>${bth('nr','Nr.','width:90px')}${bth('st','Status','width:150px')}${bth('date','Datum','width:140px')}${bth('sup','Lieferant / Firma')}${bth('desc','Beschreibung')}${bth('cat','Kategorie','width:140px')}${bth('gw','Gewerk','width:120px')}${bth('amt','Betrag CHF','width:110px;text-align:right')}${bth('pins','Pins','width:26%')}<th></th></tr>
-    <tr class="flt"><th></th><th><input data-bfl="nr" value="${esc(UI.bfl.nr)}" placeholder="Filter"></th><th><select data-bfl="st"><option value="">Alle</option>${stList().map(x=>`<option value="${x.k}" ${UI.bfl.st===x.k?'selected':''}>${esc(x.n)}</option>`).join('')}</select></th><th><input data-bfl="date" value="${esc(UI.bfl.date)}" placeholder="z.B. 2022 / 03.2022"></th>
+    <tr class="flt"><th></th><th><input data-bfl="nr" value="${esc(UI.bfl.nr)}" placeholder="Filter"></th><th><select data-bfl="st"><option value="">Alle</option>${stList().map(x=>`<option value="${x.k}" ${UI.bfl.st===x.k?'selected':''}>${stDot(x.c)} ${esc(x.n)}</option>`).join('')}</select></th><th><input data-bfl="date" value="${esc(UI.bfl.date)}" placeholder="z.B. 2022 / 03.2022"></th>
       <th><input data-bfl="sup" value="${esc(UI.bfl.sup)}" placeholder="Filter"></th><th><input data-bfl="desc" value="${esc(UI.bfl.desc)}" placeholder="Filter"></th>
       <th><select data-bfl="cat"><option value="">Alle</option>${CATS.map(c=>`<option ${UI.bfl.cat===c?'selected':''}>${c}</option>`).join('')}</select></th>
       <th><select data-bfl="gw"><option value="">Alle</option>${GEWERKE.map(g=>`<option ${UI.bfl.gw===g?'selected':''}>${g}</option>`).join('')}<option value="-" ${UI.bfl.gw==='-'?'selected':''}>Ohne Gewerk</option></select></th>
