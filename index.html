@@ -567,7 +567,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='47 (09.11.2026, Quartalsrapport ohne Logo)';
+const APP_VERSION='48 (09.11.2026, Arbeitszeit-Code pro Mitarbeiter)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1157,51 +1157,86 @@ function parseTime(v){const t=String(v||'').trim().replace(/[.,h ]/g,':');if(!t)
 const tMin=t=>{if(!t)return null;const [h,m]=t.split(':').map(Number);return h*60+m};
 function workHours(w){const a=tMin(w.von),b=tMin(w.bis);if(a!=null&&b!=null){let d=b-a;if(d<0)d+=1440;d-=(+w.pause||0);return Math.max(0,Math.round(d/60*100)/100)}return +w.h||0}
 const projRate=()=>{const r=parseAmount(S.project.rate??'');return r===''?0:r};
-const workRate=w=>w.rate!==''&&w.rate!=null?+w.rate:projRate();
+/* Mitarbeitende (MA): S.project.mas [{k,n,rate}] – synchronisiert. Einsatz w.ma = MA-Schlüssel ('' = ohne MA) */
+const maList=()=>Array.isArray(S.project.mas)?S.project.mas.filter(m=>!m.del):[];
+const maById=k=>maList().find(m=>m.k===k);
+const maOf=w=>w&&w.ma&&maById(w.ma)?w.ma:'';
+const maName=k=>(maById(k)||{}).n||'ohne MA';
+async function saveMas(){await dbPut('kv',S.project)}
+const workRate=w=>{if(w.rate!==''&&w.rate!=null)return +w.rate;const m=maById(maOf(w));if(m&&m.rate!==''&&m.rate!=null)return +m.rate;return projRate()};
 const workCost=w=>Math.round(workHours(w)*workRate(w)*100)/100;
 const workSorted=()=>[...S.work].sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.von||'').localeCompare(b.von||'')||(a.t||0)-(b.t||0));
 const sumH=ws=>Math.round(ws.reduce((x,w)=>x+workHours(w),0)*100)/100;
 const sumC=ws=>Math.round(ws.reduce((x,w)=>x+workCost(w),0)*100)/100;
 const hfmt=h=>(+h||0).toLocaleString('de-CH',{minimumFractionDigits:2,maximumFractionDigits:2})+' h';
-/* Quartalsrapport Arbeitszeit – Unterschrift Bauherr */
+/* Ansicht pro MA: UI.wm = '' (alle) | '-' (ohne MA) | MA-Schlüssel */
+const workOfMa=()=>workSorted().filter(w=>!UI.wm||(UI.wm==='-'?!maOf(w):maOf(w)===UI.wm));
+const workFiltered=()=>workOfMa().filter(w=>!UI.wy||(w.date||'').startsWith(UI.wy));
+function workSumText(){const l=workFiltered();return `${l.length} Einsätze · <b>${hfmt(sumH(l))}</b> · CHF <b>${chf(sumC(l))}</b>`}
+/* Quartalsrapport / Liste Arbeitszeit – Unterschrift Bauherr */
 const bauherr=()=>S.project.bauherr!=null&&S.project.bauherr!==''?S.project.bauherr:'Maja Tarnutzer';
 const quarterOf=d=>d&&/^\d{4}-\d{2}/.test(d)?d.slice(0,4)+'-Q'+Math.ceil(+d.slice(5,7)/3):'';
-const workQuarters=()=>[...new Set(S.work.map(w=>quarterOf(w.date)).filter(Boolean))].sort();
+const workQuarters=()=>[...new Set(workOfMa().map(w=>quarterOf(w.date)).filter(Boolean))].sort();
 const qRange=q=>{const y=+q.slice(0,4),n=+q.slice(-1),m=(n-1)*3;const pad2=x=>String(x).padStart(2,'0'),last=new Date(Date.UTC(y,m+3,0)).getUTCDate();return [`${y}-${pad2(m+1)}-01`,`${y}-${pad2(m+3)}-${pad2(last)}`]};
 const qLabel=q=>{const [a,b]=qRange(q);return `${q.slice(-1)}. Quartal ${q.slice(0,4)} (${fmtDate(a)} – ${fmtDate(b)})`};
-function qReportHtml(q){const P=S.project,ws=workSorted().filter(w=>quarterOf(w.date)===q),[a,b]=qRange(q),wd=d=>['So','Mo','Di','Mi','Do','Fr','Sa'][new Date(d+'T12:00').getDay()];
-  return `<section class="qr"><div class="qrh"><div class="qt" style="text-align:left"><b>Quartalsrapport Arbeitszeit</b><span>${q.slice(-1)}. Quartal ${q.slice(0,4)} · ${fmtDate(a)} – ${fmtDate(b)}</span></div></div>
-    <table class="qri"><tbody><tr><td>Projekt</td><td><b>${esc(P.name||APP.title)}</b></td></tr>${P.address?`<tr><td>Adresse</td><td>${esc(P.address)}</td></tr>`:''}<tr><td>Bauherr</td><td>${esc(bauherr())}</td></tr>${P.author?`<tr><td>Erstellt von</td><td>${esc(P.author)}</td></tr>`:''}</tbody></table>
-    <table class="qrt"><thead><tr><th>Datum</th><th>Von</th><th>Bis</th><th class="r">Pause</th><th class="r">Std.</th><th>Tätigkeit</th><th class="r">Ansatz</th><th class="r">CHF</th></tr></thead><tbody>
-    ${ws.map(w=>`<tr><td style="white-space:nowrap">${wd(w.date)} ${fmtDate(w.date)}</td><td>${esc(w.von||'')}</td><td>${esc(w.bis||'')}</td><td class="r">${w.pause?w.pause+' min':''}</td><td class="r">${chf(workHours(w))}</td><td>${esc(w.note||'')}</td><td class="r">${chf(workRate(w))}</td><td class="r">${chf(workCost(w))}</td></tr>`).join('')}
-    <tr class="tot"><td colspan="4">Total ${ws.length} Einsätze</td><td class="r">${chf(sumH(ws))}</td><td></td><td></td><td class="r">${chf(sumC(ws))}</td></tr></tbody></table>
-    <div class="qrs"><p>Die aufgeführten Arbeitsstunden für den Zeitraum ${fmtDate(a)} – ${fmtDate(b)} werden bestätigt.</p>
+function workRepHtml(title,sub,ws,period){const P=S.project,wd=d=>d?['So','Mo','Di','Mi','Do','Fr','Sa'][new Date(d+'T12:00').getDay()]:'',multi=new Set(ws.map(maOf)).size>1;
+  return `<section class="qr"><div class="qrh"><div class="qt" style="text-align:left"><b>${esc(title)}</b><span>${esc(sub)}</span></div></div>
+    <table class="qri"><tbody><tr><td>Projekt</td><td><b>${esc(P.name||APP.title)}</b></td></tr>${P.address?`<tr><td>Adresse</td><td>${esc(P.address)}</td></tr>`:''}<tr><td>Bauherr</td><td>${esc(bauherr())}</td></tr>${UI.wm&&UI.wm!=='-'?`<tr><td>Mitarbeiter</td><td><b>${esc(maName(UI.wm))}</b></td></tr>`:''}${P.author?`<tr><td>Erstellt von</td><td>${esc(P.author)}</td></tr>`:''}</tbody></table>
+    <table class="qrt"><thead><tr><th>Datum</th>${multi?'<th>Mitarbeiter</th>':''}<th>Von</th><th>Bis</th><th class="r">Pause</th><th class="r">Std.</th><th>Tätigkeit</th><th class="r">Ansatz</th><th class="r">CHF</th></tr></thead><tbody>
+    ${ws.map(w=>`<tr><td style="white-space:nowrap">${wd(w.date)} ${fmtDate(w.date)}</td>${multi?`<td>${esc(maName(maOf(w)))}</td>`:''}<td>${esc(w.von||'')}</td><td>${esc(w.bis||'')}</td><td class="r">${w.pause?w.pause+' min':''}</td><td class="r">${chf(workHours(w))}</td><td>${esc(w.note||'')}</td><td class="r">${chf(workRate(w))}</td><td class="r">${chf(workCost(w))}</td></tr>`).join('')}
+    <tr class="tot"><td colspan="${multi?5:4}">Total ${ws.length} Einsätze</td><td class="r">${chf(sumH(ws))}</td><td></td><td></td><td class="r">${chf(sumC(ws))}</td></tr></tbody></table>
+    ${multi?`<table class="qrt" style="width:auto;margin-top:4mm"><tbody>${[...new Set(ws.map(maOf))].map(k=>{const l=ws.filter(w=>maOf(w)===k);return `<tr><td>${esc(maName(k))}</td><td class="r">${chf(sumH(l))} h</td><td class="r">CHF ${chf(sumC(l))}</td></tr>`}).join('')}</tbody></table>`:''}
+    <div class="qrs"><p>Die aufgeführten Arbeitsstunden${period?' für den Zeitraum '+period:''} werden bestätigt.</p>
       <div class="sg"><div><div class="ln"></div><small>Ort, Datum</small></div><div><div class="ln"></div><small>Unterschrift Bauherr: ${esc(bauherr())}</small></div></div></div></section>`}
-async function doQReport(){const qs=UI.wq==='all'?workQuarters():[UI.wq];if(!qs[0])return;const pr=$('#print');pr.innerHTML=qs.map(qReportHtml).join('');
-  await Promise.all([...pr.querySelectorAll('img')].map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r})));
-  const old=document.title;document.title=`Quartalsrapport ${UI.wq==='all'?'alle Quartale':qs[0].replace('-',' ')} – ${S.project.name||APP.title}`;setTimeout(()=>{window.print();document.title=old},150)}
-const workFiltered=()=>workSorted().filter(w=>!UI.wy||(w.date||'').startsWith(UI.wy));
-function workSumText(){const l=workFiltered();return `${l.length} Einsätze · <b>${hfmt(sumH(l))}</b> · CHF <b>${chf(sumC(l))}</b>`}
+function qReportHtml(q){const [a,b]=qRange(q);return workRepHtml('Quartalsrapport Arbeitszeit'+(UI.wm&&UI.wm!=='-'?' – '+maName(UI.wm):''),`${q.slice(-1)}. Quartal ${q.slice(0,4)} · ${fmtDate(a)} – ${fmtDate(b)}`,workOfMa().filter(w=>quarterOf(w.date)===q),`${fmtDate(a)} – ${fmtDate(b)}`)}
+async function printWork(html,title){const pr=$('#print');pr.innerHTML=html;const old=document.title;document.title=title;setTimeout(()=>{window.print();document.title=old},150)}
+async function doQReport(){const qs=UI.wq==='all'?workQuarters():[UI.wq];if(!qs[0])return;
+  printWork(qs.map(qReportHtml).join(''),`Quartalsrapport ${UI.wq==='all'?'alle Quartale':qs[0].replace('-',' ')}${UI.wm&&UI.wm!=='-'?' '+maName(UI.wm):''} – ${S.project.name||APP.title}`)}
+async function doWorkList(){const ws=workFiltered();if(!ws.length)return toast('Keine Einsätze für diese Auswahl',2500);const ds=ws.map(w=>w.date).filter(Boolean).sort(),per=ds.length?`${fmtDate(ds[0])} – ${fmtDate(ds[ds.length-1])}`:'';
+  const who=UI.wm?(UI.wm==='-'?'ohne MA':maName(UI.wm)):'alle Mitarbeiter';
+  printWork(workRepHtml('Arbeitszeitliste – '+who,(UI.wy?'Jahr '+UI.wy+' · ':'')+per,ws,per),`Arbeitszeitliste ${who}${UI.wy?' '+UI.wy:''} – ${S.project.name||APP.title}`)}
+/* neue Zeile unten in der Tabelle: direkt weitere Zeiten erfassen */
+const WNEW={date:'',von:'',bis:'',pause:'',h:'',note:'',ma:''};
+function wNewRow(r,showMa){const d=WNEW.date||(()=>{const l=workFiltered();return l.length?l[l.length-1].date:today()})();
+  return `<tr class="wnew"><td><input type="date" data-nw="date" value="${esc(d)}"></td>${showMa?`<td><select data-nw="ma">${maList().map(m=>`<option value="${m.k}" ${WNEW.ma===m.k?'selected':''}>${esc(m.n)}</option>`).join('')}<option value="" ${WNEW.ma?'':'selected'}>– ohne MA –</option></select></td>`:''}
+    <td><input class="tm" data-nw="von" inputmode="numeric" value="${esc(WNEW.von)}" placeholder="0730"></td><td><input class="tm" data-nw="bis" inputmode="numeric" value="${esc(WNEW.bis)}" placeholder="1700"></td>
+    <td><input class="tm" data-nw="pause" inputmode="numeric" value="${esc(WNEW.pause)}"></td><td><input class="nm" data-nw="h" inputmode="decimal" value="${esc(WNEW.h)}" placeholder="Std."></td>
+    <td class="mut r" style="font-size:12px">${chf(UI.wm&&UI.wm!=='-'&&maById(UI.wm)&&maById(UI.wm).rate!==''&&maById(UI.wm).rate!=null?maById(UI.wm).rate:r)}</td><td></td><td><input data-nw="note" value="${esc(WNEW.note)}" placeholder="Tätigkeit – Enter = hinzufügen"></td>
+    <td><button class="b p sm" data-act="wAdd" title="Zeile hinzufügen (Enter)">＋</button></td></tr>`}
+async function wAddNew(){const tr=document.querySelector('#v-arbeit tr.wnew:not(.done)');if(!tr)return;const v=k=>{const el=tr.querySelector(`[data-nw="${k}"]`);return el?el.value.trim():''};
+  const von=v('von')?parseTime(v('von')):'',bis=v('bis')?parseTime(v('bis')):'';if(von===null||bis===null){toast('Zeit bitte ohne Doppelpunkt eingeben, z.B. 0730 oder 1700',4000);return}
+  const w={id:uid(),t:Date.now(),date:v('date')||today(),von:von||'',bis:bis||'',pause:parseInt(v('pause').replace(/\D/g,''),10)||'',h:v('h')?parseAmount(v('h')):'',rate:'',note:v('note'),by:SES?SES.email:'',ma:UI.wm&&UI.wm!=='-'?UI.wm:(tr.querySelector('[data-nw="ma"]')?v('ma'):'')};
+  if(!workHours(w)){toast('Bitte Von/Bis oder Stunden eingeben',3000);const f=tr.querySelector('[data-nw="von"]');if(f)f.focus();return}
+  tr.classList.add('done');S.work.push(w);await dbPut('work',w);Object.assign(WNEW,{date:w.date,von:'',bis:'',pause:'',h:'',note:'',ma:w.ma});if(UI.wy&&!w.date.startsWith(UI.wy))UI.wy='';renderArbeit();
+  const f=document.querySelector('#v-arbeit tr.wnew [data-nw="von"]');if(f){f.scrollIntoView({block:'nearest'});f.focus()};toast(`✓ ${fmtDate(w.date)} · ${hfmt(workHours(w))} erfasst`,1800)}
 function renderArbeit(){
-  const years=[...new Set(S.work.map(w=>(w.date||'').slice(0,4)).filter(Boolean))].sort(),list=workFiltered(),r=projRate();
-  $('#v-arbeit').innerHTML=`<div class="bbar"><button class="b p" data-act="addWork">+ Arbeitszeit</button>
-    <label class="b">📥 Excel importieren<input type="file" accept=".xlsx,.xlsm,.csv" hidden data-up="workXls"></label>
+  const all=workSorted(),mas=maList(),years=[...new Set(workOfMa().map(w=>(w.date||'').slice(0,4)).filter(Boolean))].sort(),list=workFiltered(),r=projRate(),showMa=!UI.wm&&mas.length>0,cur=UI.wm&&UI.wm!=='-'?maById(UI.wm):null;
+  if(UI.wm&&UI.wm!=='-'&&!cur)UI.wm='';
+  const noMa=all.filter(w=>!maOf(w)),cnt=k=>all.filter(w=>maOf(w)===k);
+  const chip=(k,label,ws,c)=>`<button class="tagb ${UI.wm===k?'on':''}" style="--c:${c||'#1f2328'}" data-act="wmSet" data-id="${k}">${label} <small style="opacity:.75">${ws.length?hfmt(sumH(ws)):''}</small></button>`;
+  $('#v-arbeit').innerHTML=`<div class="fbar wmb">${chip('','Alle',all)}${mas.map(m=>chip(m.k,'👷 '+esc(m.n),cnt(m.k),'#0f766e')).join('')}${noMa.length&&mas.length?chip('-','ohne MA',noMa,'#9ca3af'):''}<button class="b sm" data-act="maAdd">+ Mitarbeiter</button></div>
+    ${cur?`<div class="bbar mabar"><span class="wrate">👷 Name <input data-ma="n" value="${esc(cur.n)}" style="width:170px;text-align:left"></span><span class="wrate">Ansatz CHF <input data-ma="rate" inputmode="decimal" value="${cur.rate!==''&&cur.rate!=null?chf(cur.rate):''}" placeholder="${chf(r)}"></span>
+      ${noMa.length?`<button class="b" data-act="maTake" title="Alle Einsätze ohne Mitarbeiter diesem MA zuordnen">↳ ${noMa.length} Einsätze ohne MA → ${esc(cur.n)}</button>`:''}<span class="sp"></span><button class="b d sm" data-act="maDel">MA löschen</button></div>`:''}
+    <div class="bbar"><label class="b">📥 Excel importieren<input type="file" accept=".xlsx,.xlsm,.csv" hidden data-up="workXls"></label>
     <span class="wrate">Stundenansatz CHF <input data-pf="rate" inputmode="decimal" value="${S.project.rate!=null&&S.project.rate!==''?chf(r):''}" placeholder="0.00"></span>
     <select data-ch="wy"><option value="">Alle Jahre</option>${years.map(y=>`<option ${UI.wy===y?'selected':''}>${y}</option>`).join('')}</select>
     <select data-ch="wq" title="Quartal für den Rapport"><option value="">Quartal wählen …</option>${workQuarters().map(q=>`<option value="${q}" ${UI.wq===q?'selected':''}>${qLabel(q)}</option>`).join('')}${workQuarters().length>1?`<option value="all" ${UI.wq==='all'?'selected':''}>Alle Quartale (je eine Seite)</option>`:''}</select>
     <button class="b" data-act="qRep" ${UI.wq?'':'disabled'} title="Quartalsrapport zum Unterschreiben drucken / als PDF speichern">🖨 Quartalsrapport</button>
+    <button class="b" data-act="wList" title="Liste der angezeigten Einsätze drucken / als PDF speichern">🖨 Liste</button>
     <span class="wrate">Bauherr <input data-pf="bauherr" value="${esc(bauherr())}" style="width:160px;text-align:left"></span>
     <span class="sp"></span><span class="sum" id="wsum">${workSumText()}</span></div>
-    <p class="mut" style="font-size:12px;margin:0 0 10px">Zeiten ohne Doppelpunkt eingeben (0730, 1700). Mit Von/Bis rechnet die App die Stunden selbst, sonst Stunden direkt eintragen. Ansatz leer = Stundenansatz oben.</p>
-    ${list.length?`<div class="tw"><table class="bt wt" style="min-width:880px"><thead><tr><th style="width:140px">Datum</th><th>Von</th><th>Bis</th><th>Pause Min</th><th class="r" style="width:80px">Std.</th><th class="r" style="width:90px">Ansatz</th><th class="r" style="width:100px">CHF</th><th>Bemerkung</th><th></th></tr></thead><tbody>
+    <p class="mut" style="font-size:12px;margin:0 0 10px">Zeiten ohne Doppelpunkt eingeben (0730, 1700). Mit Von/Bis rechnet die App die Stunden selbst, sonst Stunden direkt eintragen. Neue Zeiten unten in der leeren Zeile erfassen – Enter fügt sie hinzu. Ansatz leer = Ansatz des MA bzw. Stundenansatz oben.</p>
+    <div class="tw"><table class="bt wt" style="min-width:880px"><thead><tr><th style="width:140px">Datum</th>${showMa?'<th style="width:180px">Mitarbeiter</th>':''}<th>Von</th><th>Bis</th><th>Pause Min</th><th class="r" style="width:80px">Std.</th><th class="r" style="width:90px">Ansatz</th><th class="r" style="width:100px">CHF</th><th>Bemerkung</th><th></th></tr></thead><tbody>
     ${list.map(w=>`<tr data-id="${w.id}"><td><input type="date" data-wf="date" value="${esc(w.date)}"></td>
+      ${showMa?`<td><select data-wf="ma">${mas.map(m=>`<option value="${m.k}" ${maOf(w)===m.k?'selected':''}>${esc(m.n)}</option>`).join('')}<option value="" ${maOf(w)?'':'selected'}>– ohne MA –</option></select></td>`:''}
       <td><input class="tm" data-wf="von" inputmode="numeric" value="${esc(w.von||'')}" placeholder="${w.h?'':'0730'}"></td><td><input class="tm" data-wf="bis" inputmode="numeric" value="${esc(w.bis||'')}" placeholder="${w.h?'':'1700'}"></td>
       <td><input class="tm" data-wf="pause" inputmode="numeric" value="${w.pause||''}"></td>
       <td><input class="nm" data-wf="h" inputmode="decimal" value="${workHours(w)?chf(workHours(w)):''}" ${w.von&&w.bis?'readonly title="Aus Von/Bis berechnet"':''}></td>
-      <td><input class="nm" data-wf="rate" inputmode="decimal" value="${w.rate!==''&&w.rate!=null?chf(w.rate):''}" placeholder="${chf(r)}"></td>
+      <td><input class="nm" data-wf="rate" inputmode="decimal" value="${w.rate!==''&&w.rate!=null?chf(w.rate):''}" placeholder="${chf(workRate(Object.assign({},w,{rate:''})))}"></td>
       <td class="r wb">${chf(workCost(w))}</td><td><input data-wf="note" value="${esc(w.note||'')}" placeholder="Tätigkeit"></td>
-      <td><button class="b d sm" data-act="delWork" data-id="${w.id}" title="Löschen">×</button></td></tr>`).join('')}</tbody></table></div>`
-    :`<p class="mut c" style="margin-top:30px">${S.work.length?'Keine Einsätze in diesem Jahr.':'Noch keine Arbeitszeiten. Über «📥 Excel importieren» kannst du deine Stundenliste einmalig übernehmen.'}</p>`}`}
+      <td><button class="b d sm" data-act="delWork" data-id="${w.id}" title="Löschen">×</button></td></tr>`).join('')}
+    ${list.length?'':`<tr><td colspan="${showMa?10:9}" class="mut c" style="padding:14px">${all.length?'Keine Einsätze für diese Auswahl – unten direkt erfassen.':'Noch keine Arbeitszeiten. Unten direkt erfassen oder über «📥 Excel importieren» übernehmen.'}</td></tr>`}
+    ${wNewRow(r,showMa)}</tbody></table></div>`}
 /* Excel (.xlsx) direkt im Browser lesen – ohne Zusatzbibliothek, funktioniert offline */
 async function unzip(buf){const u=new Uint8Array(buf),dv=new DataView(buf);let e=u.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw new Error('Keine gültige Excel-Datei');
   const n=dv.getUint16(e+10,true);let o=dv.getUint32(e+16,true);const files={};
@@ -1559,6 +1594,16 @@ const ACT={
   addPin:()=>{UI.add=!UI.add;renderStage()},
   surfView:()=>{UI.sv=!UI.sv;renderPlan()},
   qRep:()=>doQReport(),
+  wList:()=>doWorkList(),
+  wAdd:()=>wAddNew(),
+  wmSet:id=>{UI.wm=id||'';UI.wq='';WNEW.ma=UI.wm&&UI.wm!=='-'?UI.wm:WNEW.ma;renderArbeit()},
+  maAdd:async()=>{const n=(prompt('Name des Mitarbeiters:','')||'').trim();if(!n)return;if(maList().some(m=>m.n.toLowerCase()===n.toLowerCase())){toast('Diesen Mitarbeiter gibt es schon',2500);return}
+    S.project.mas=Array.isArray(S.project.mas)?S.project.mas:[];const m={k:'m_'+uid(),n,rate:''};S.project.mas.push(m);await saveMas();UI.wm=m.k;WNEW.ma=m.k;renderArbeit();
+    const nm=S.work.filter(w=>!maOf(w)).length;toast(`Mitarbeiter «${n}» angelegt${nm?` – ${nm} Einsätze ohne MA kannst du mit «↳ … → ${n}» zuordnen`:''}`,5000)},
+  maDel:async()=>{const m=maById(UI.wm);if(!m)return;const n=S.work.filter(w=>maOf(w)===m.k).length;if(!confirm(`Mitarbeiter «${m.n}» löschen?${n?`\n\n${n} Einsätze bleiben erhalten und sind danach «ohne MA».`:''}`))return;
+    for(const w of S.work)if(w.ma===m.k){w.ma='';await dbPut('work',w)}m.del=true;await saveMas();UI.wm='';renderArbeit()},
+  maTake:async()=>{const m=maById(UI.wm);if(!m)return;const l=S.work.filter(w=>!maOf(w));if(!l.length||!confirm(`${l.length} Einsätze ohne Mitarbeiter «${m.n}» zuordnen?`))return;
+    for(const w of l){w.ma=m.k;await dbPut('work',w)}renderArbeit();toast(`${l.length} Einsätze → ${m.n}`,2500)},
   mvStart:()=>{if(!UI.pin)return;UI.mvPin=UI.pin;UI.add=false;UI.draw=null;UI.assign=null;if(isSite(curFloor())){const f=orderedFloors().find(x=>!isSite(x));if(f)UI.floor=f.id}renderPlan();toast('Ziel-Grundriss wählen und Position antippen',3500)},
   mvCancel:()=>{const id=UI.mvPin;UI.mvPin=null;const p=pinById(id);if(p){UI.floor=p.floorId;UI.pin=id}renderPlan()},
   planUp:()=>$('#planInput').click(),
@@ -1717,6 +1762,7 @@ document.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(
   if(a.tagName==='A'||a.tagName==='BUTTON')e.preventDefault();ACT[a.dataset.act](a.dataset.id,a,e)});
 /* Datumsfeld wird beim Tippen kurz leer – leer erst übernehmen, wenn das Feld verlassen wird */
 document.addEventListener('focusout',e=>{const t=e.target;if(t&&t.type==='date'&&t.dataset.pendEmpty){delete t.dataset.pendEmpty;if(!t.value)setTimeout(()=>t.dispatchEvent(new Event('change',{bubbles:true})),0)}});
+document.addEventListener('keydown',e=>{const t=e.target;if(e.key==='Enter'&&t&&t.dataset&&t.dataset.nw!==undefined){e.preventDefault();if(t.dataset.nw!=='ma'&&t.dataset.nw!=='date')WNEW[t.dataset.nw]=t.value;wAddNew()}});
 document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(t.type==='date'&&(d.bi||d.bf)){if(!t.value&&document.activeElement===t){t.dataset.pendEmpty='1';return}if(!dateOk(t.value))return}
   if(d.surf){const p=pinById(UI.pin);if(!p)return;let v=t.value;if(v==='__new'){v=await newSurf();if(!v){renderPinPanel();return}}touch('pins',p.id);if(v)p.surf=v;else delete p.surf;await dbPut('pins',p);await relinkSurf();renderPinPanel();renderStage();
@@ -1740,6 +1786,9 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
     const nx=document.querySelector(d.dim==='dimW'?'[data-dim="dimH"]':'[data-katq]');if(nx&&d.dim==='dimW'&&!e.dimH)nx.focus();return}
   if(d.mq!==undefined||d.mp!==undefined){const p=pinById(UI.pin),e=curEntry(p);if(!e)return;const m=e.mats[+(d.mq??d.mp)];if(!m)return;
     if(d.mq!==undefined){m.qty=parseAmount(t.value);m.qtyAuto=false}else m.price=parseAmount(t.value)===''?null:parseAmount(t.value);await dbPut('pins',p);renderPinPanel();return}
+  if(d.ma){const m=maById(UI.wm);if(!m)return;if(d.ma==='n'){const n=t.value.trim();if(!n||maList().some(x=>x!==m&&x.n.toLowerCase()===n.toLowerCase())){toast(n?'Diesen Namen gibt es schon':'Name darf nicht leer sein',3000);t.value=m.n;return}m.n=n}else{m.rate=parseAmount(t.value);}await saveMas();renderArbeit();return}
+  if(d.nw){if(!t.isConnected||t.closest('tr.wnew.done'))return;if(d.nw!=='ma'){const tr=t.closest('tr.wnew');if(tr)WNEW[d.nw]=t.value}else WNEW.ma=t.value;return}
+  if(d.wf==='ma'){const w=S.work.find(x=>x.id===t.closest('tr').dataset.id);if(!w)return;w.ma=t.value;await dbPut('work',w);renderArbeit();return}
   if(d.wf){const tr=t.closest('tr'),w=S.work.find(x=>x.id===tr.dataset.id);if(!w)return;
     if(d.wf==='von'||d.wf==='bis'){const v=parseTime(t.value);if(v===null){toast('Zeit bitte ohne Doppelpunkt eingeben, z.B. 0730 oder 1700',4000);t.value=w[d.wf]||'';return}w[d.wf]=v;t.value=v}
     else if(d.wf==='pause'){w.pause=parseInt(String(t.value).replace(/\D/g,''),10)||'';t.value=w.pause}
@@ -1971,12 +2020,12 @@ async function doPrint(){
       br.items.filter(x=>x.m&&x.m.has(GK.k)).forEach(x=>rows.push(`<tr><td>${itemNo(b,(b.items||[]).indexOf(x.it))}</td><td>${fmtDate(itDate(b,x.it))}</td><td>${esc(b.supplier||'')}</td><td>${esc(x.it.name)}${x.it.qty?' · '+esc(x.it.qty):''}</td><td class="r">${chf(x.it.amount)}</td></tr>`));
       if(br.restMap.get(GK.k))rows.push(`<tr><td>B-${pad(b.nr)}</td><td></td><td></td><td><i>Anteil Rest (MWST/Rundung/Rabatt)</i></td><td class="r">${chf(br.restMap.get(GK.k))}</td></tr>`);tot+=br.gen[GK.k]}
     if(rows.length)h+=`<section class="msum"><h2>${GK.h}</h2><table class="mt"><thead><tr><th>Pos.</th><th>Datum</th><th>Lieferant</th><th>Artikel</th><th class="r">CHF</th></tr></thead><tbody>${rows.join('')}<tr class="tot"><td colspan="4">Total ${GK.n}</td><td class="r">${chf(tot)}</td></tr></tbody></table></section>`}
-  if(APP.work&&o.work&&!G&&S.work.length){const ws=workSorted(),tz=ws.some(w=>w.von||w.bis),yr=new Map(),rt=new Set(ws.map(workRate));
+  if(APP.work&&o.work&&!G&&S.work.length){const ws=workSorted(),mm=new Set(ws.map(maOf)).size>1||ws.some(maOf),tz=ws.some(w=>w.von||w.bis),yr=new Map(),rt=new Set(ws.map(workRate));
     for(const w of ws){const y=(w.date||'').slice(0,4)||'ohne Datum',a=yr.get(y)||[0,0];a[0]+=workHours(w);a[1]+=workCost(w);yr.set(y,a)}
-    h+=`<section class="msum"><h2>Arbeitszeit</h2>${rt.size===1?`<p style="color:#666">Stundenansatz CHF ${chf([...rt][0])}</p>`:''}<table class="mt"><thead><tr><th>Datum</th>${tz?'<th>Von</th><th>Bis</th><th class="r">Pause</th>':''}<th>Bemerkung</th><th class="r">Std.</th>${rt.size>1?'<th class="r">Ansatz</th>':''}<th class="r">CHF</th></tr></thead><tbody>
-    ${ws.map(w=>`<tr><td>${fmtDate(w.date)}</td>${tz?`<td>${esc(w.von||'')}</td><td>${esc(w.bis||'')}</td><td class="r">${w.pause?w.pause+' Min':''}</td>`:''}<td>${esc(w.note||'')}</td><td class="r">${chf(workHours(w))}</td>${rt.size>1?`<td class="r">${chf(workRate(w))}</td>`:''}<td class="r">${chf(workCost(w))}</td></tr>`).join('')}
-    <tr class="tot"><td colspan="${tz?5:2}">Total Arbeitszeit</td><td class="r">${chf(sumH(ws))}</td>${rt.size>1?'<td></td>':''}<td class="r">${chf(sumC(ws))}</td></tr></tbody></table>
-    <h3>Nach Jahr</h3><table class="mt"><thead><tr><th>Jahr</th><th class="r">Std.</th><th class="r">CHF</th></tr></thead><tbody>${[...yr].sort().map(([y,[hh,c]])=>`<tr><td>${y}</td><td class="r">${chf(hh)}</td><td class="r">${chf(c)}</td></tr>`).join('')}</tbody></table></section>`}
+    h+=`<section class="msum"><h2>Arbeitszeit</h2>${rt.size===1?`<p style="color:#666">Stundenansatz CHF ${chf([...rt][0])}</p>`:''}<table class="mt"><thead><tr><th>Datum</th>${mm?'<th>Mitarbeiter</th>':''}${tz?'<th>Von</th><th>Bis</th><th class="r">Pause</th>':''}<th>Bemerkung</th><th class="r">Std.</th>${rt.size>1?'<th class="r">Ansatz</th>':''}<th class="r">CHF</th></tr></thead><tbody>
+    ${ws.map(w=>`<tr><td>${fmtDate(w.date)}</td>${mm?`<td>${esc(maName(maOf(w)))}</td>`:''}${tz?`<td>${esc(w.von||'')}</td><td>${esc(w.bis||'')}</td><td class="r">${w.pause?w.pause+' Min':''}</td>`:''}<td>${esc(w.note||'')}</td><td class="r">${chf(workHours(w))}</td>${rt.size>1?`<td class="r">${chf(workRate(w))}</td>`:''}<td class="r">${chf(workCost(w))}</td></tr>`).join('')}
+    <tr class="tot"><td colspan="${(tz?5:2)+(mm?1:0)}">Total Arbeitszeit</td><td class="r">${chf(sumH(ws))}</td>${rt.size>1?'<td></td>':''}<td class="r">${chf(sumC(ws))}</td></tr></tbody></table>
+    ${mm?`<h3>Nach Mitarbeiter</h3><table class="mt"><thead><tr><th>Mitarbeiter</th><th class="r">Std.</th><th class="r">CHF</th></tr></thead><tbody>${[...new Set(ws.map(maOf))].map(k=>{const l=ws.filter(w=>maOf(w)===k);return `<tr><td>${esc(maName(k))}</td><td class="r">${chf(sumH(l))}</td><td class="r">${chf(sumC(l))}</td></tr>`}).join('')}</tbody></table>`:''}<h3>Nach Jahr</h3><table class="mt"><thead><tr><th>Jahr</th><th class="r">Std.</th><th class="r">CHF</th></tr></thead><tbody>${[...yr].sort().map(([y,[hh,c]])=>`<tr><td>${y}</td><td class="r">${chf(hh)}</td><td class="r">${chf(c)}</td></tr>`).join('')}</tbody></table></section>`}
   {const bT=bs.reduce((x,b)=>x+bAmt(b),0),mT=matTotal(G?allMats().filter(m=>(m.gw||'Holzbau')===G):allMats()),wT=APP.work&&!G?sumC(S.work):0,wH=APP.work&&!G?sumH(S.work):0;
     h+=`<section class="msum"><h2>Gesamtbetrag Projekt${G?' – Gewerk '+esc(G):''}</h2><table class="mt" style="font-size:11pt"><tbody>
     <tr><td>Belege</td><td class="r">CHF ${chf(bT)}</td></tr>${mT?`<tr><td>Material (erfasste Mengen, Netto-Preise)</td><td class="r">CHF ${chf(mT)}</td></tr>`:''}${wH?`<tr><td>Arbeitszeit (${hfmt(wH)})</td><td class="r">CHF ${chf(wT)}</td></tr>`:''}
@@ -2111,7 +2160,7 @@ function mergeRec(store,remote,local){const L=JSON.parse(JSON.stringify(local)),
   if(store==='belege'){fillGaps(L,Object.assign({},Rm,{items:undefined}));const ids=new Set((L.items||[]).map(it=>it.id));L.items=[...(L.items||[]),...(Rm.items||[]).filter(it=>!ids.has(it.id))];
     L.split=Object.assign({},Rm.split||{},L.split||{});L.notDup=uni(L.notDup,Rm.notDup);L.itemLinks=uni(L.itemLinks,Rm.itemLinks);if(!L.items.length)delete L.items;return L}
   if(store==='floors'){fillGaps(L,Object.assign({},Rm,{rooms:undefined}));const ids=new Set((L.rooms||[]).map(r=>r.id));L.rooms=[...(L.rooms||[]),...(Rm.rooms||[]).filter(r=>!ids.has(r.id))];return L}
-  if(store==='kv'){fillGaps(L,Rm);if(Array.isArray(Rm.bstat)){const ks=new Set((L.bstat||[]).map(c=>c.k));L.bstat=[...(L.bstat||[]),...Rm.bstat.filter(c=>!ks.has(c.k))]}if(Array.isArray(Rm.costs)){const ks=new Set((L.costs||[]).map(c=>c.k));L.costs=[...(L.costs||[]),...Rm.costs.filter(c=>!ks.has(c.k))]}return L}
+  if(store==='kv'){fillGaps(L,Rm);if(Array.isArray(Rm.mas)){const ks=new Set((L.mas||[]).map(c=>c.k));L.mas=[...(L.mas||[]),...Rm.mas.filter(c=>!ks.has(c.k))]}if(Array.isArray(Rm.bstat)){const ks=new Set((L.bstat||[]).map(c=>c.k));L.bstat=[...(L.bstat||[]),...Rm.bstat.filter(c=>!ks.has(c.k))]}if(Array.isArray(Rm.costs)){const ks=new Set((L.costs||[]).map(c=>c.k));L.costs=[...(L.costs||[]),...Rm.costs.filter(c=>!ks.has(c.k))]}return L}
   return fillGaps(L,Rm)}
 async function applyRemote(r,pending){
   const store=STORE_OF[r.kind];if(!store||pending.has(store+'|'+r.id))return false;
