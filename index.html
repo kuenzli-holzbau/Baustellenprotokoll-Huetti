@@ -244,6 +244,10 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .pleg .pin{position:static;display:inline-block;width:14px;height:14px;margin:0;border-width:1.5px;box-shadow:none;vertical-align:middle}
 .stleg{position:absolute;left:10px;bottom:10px;z-index:5;background:rgba(255,255,255,.92);border-radius:8px;padding:5px 10px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
 .stleg .pleg{margin:0}
+/* Kontrollansicht Oberflächen: Pin-Farbe = Oberfläche, ohne = grau */
+.pin.sv:not(.on){background:var(--c)!important}
+.pli b[style]{background-image:none!important}
+.pleg .pin.sv{background:var(--c)!important}
 .gfsel{font-weight:600}
 #v-fotos{padding:14px 18px;max-width:none;margin:0}
 #v-arbeit{padding:16px 20px;max-width:none;margin:0}
@@ -505,7 +509,7 @@ select.bst option{font-weight:600}
     <div class="toolbar" id="planBar"></div>
     <div class="asgbar" id="asgBar" hidden></div>
     <div class="stage" id="stage"></div>
-    <div class="stleg"><div class="pleg"><span><i class="pin s0"></i>keine Einträge</span><span><i class="pin s1"></i>Bilder</span><span><i class="pin s2"></i>Bilder + Material</span></div></div>
+    <div class="stleg" id="stleg"><div class="pleg"><span><i class="pin s0"></i>keine Einträge</span><span><i class="pin s1"></i>Bilder</span><span><i class="pin s2"></i>Bilder + Material</span></div></div>
   </section>
   <aside class="side" id="pinPanel"></aside>
 </main>
@@ -553,7 +557,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='39 (09.11.2026, Oberfläche je Pin)';
+const APP_VERSION='40 (09.11.2026, Kontrollansicht Oberflächen)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -766,6 +770,11 @@ const genGuess=name=>/entsorg|mulde|deponie|kehricht|sperrgut|bauschutt|abfall|r
 const SURF_BASE=['Holz','Verputz','Fliesen'];
 const surfList=()=>[...SURF_BASE,...(Array.isArray(S.project.surfs)?S.project.surfs:[]).filter(x=>x&&!SURF_BASE.includes(x))];
 const surfPins=n=>S.pins.filter(p=>p.surf===n);
+const SURF_COL={Holz:'#b45309',Verputz:'#2563eb',Fliesen:'#0d9488'},SURF_PAL=['#9333ea','#db2777','#ca8a04','#0891b2','#65a30d','#7c3aed','#be123c','#4338ca'];
+const surfColor=n=>{if(!n||!surfList().includes(n))return '#9ca3af';if(SURF_COL[n])return SURF_COL[n];const i=surfList().filter(x=>!SURF_COL[x]).indexOf(n);return SURF_PAL[i%SURF_PAL.length]};
+function stLegend(f){const el=$('#stleg');if(!el)return;if(!UI.sv){el.innerHTML=`<div class="pleg"><span><i class="pin s0"></i>keine Einträge</span><span><i class="pin s1"></i>Bilder</span><span><i class="pin s2"></i>Bilder + Material</span></div>`;return}
+  const ps=f?pinsOf(f.id):[],cnt=n=>ps.filter(p=>(p.surf||'')===n).length;
+  el.innerHTML=`<div class="pleg">${surfList().filter(n=>cnt(n)).map(n=>`<span><i class="pin sv" style="--c:${surfColor(n)}"></i>${esc(n)} (${cnt(n)})</span>`).join('')}<span><i class="pin sv" style="--c:#9ca3af"></i><b>ohne Oberfläche (${ps.filter(p=>!p.surf||!surfList().includes(p.surf)).length})</b></span></div>`}
 async function newSurf(){const n=(prompt('Name der neuen Oberfläche (z.B. Gipskarton, Beton):','')||'').trim();if(!n)return '';const ex=surfList().find(x=>x.toLowerCase()===n.toLowerCase());if(ex)return ex;
   S.project.surfs=Array.isArray(S.project.surfs)?S.project.surfs:[];S.project.surfs.push(n);await dbPut('kv',S.project);toast(`Oberfläche «${n}» angelegt`,2500);return n}
 async function relinkSurf(){for(const b of S.belege)if((b.items||[]).some(it=>it.pin==='o')){await syncItemLinks(b,'');await dbPut('belege',b)}}
@@ -985,6 +994,7 @@ function renderFloorList(){
 }
 function renderStage(){
   const f=curFloor(),bar=$('#planBar'),st=$('#stage');
+  stLegend(f&&!isSite(f)?f:null);
   {const ab=$('#asgBar'),b=asgBeleg(),ph=asgPhotos(),mp=UI.mvPin&&pinById(UI.mvPin);if(ab&&mp){ab.hidden=false;ab.innerHTML=`<span>📍 Pin <b>${mp.nr}${mp.title?' '+esc(mp.title):''}</b> verschieben nach <select data-ch="mvFloor">${orderedFloors().filter(x=>!isSite(x)).map(x=>`<option value="${x.id}" ${x.id===UI.floor?'selected':''}>${esc(floorLabel(x))}</option>`).join('')}</select> – dann Zielposition im Plan antippen</span><button class="b sm" data-act="mvCancel">Abbrechen</button>`}else if(ab&&ph){ab.hidden=false;ab.innerHTML=`<span>📷 <b>${ph.ids.length} Foto(s)</b> verschieben: Ziel-Pin antippen</span><button class="b sm" data-act="asgDone">Abbrechen</button>`}else if(ab){ab.hidden=!b;if(b){const a=UI.assign,it=a.ii!=null?(b.items||[])[a.ii]:null;
     ab.innerHTML=`<span>📍 ${it?`Position <b>${itemNo(b,a.ii)} ${esc(it.name||'')}</b>: Pin antippen`:`Beleg <b>${esc(belegLabel(b))}</b>: Pins antippen`}</span><button class="b sm" data-act="asgDone">${it?'Abbrechen':'✓ Fertig'}</button>`}}}
   if(!f){bar.innerHTML='<span class="mut">Kein Plan ausgewählt</span>';st.innerHTML=`<div class="empty"><h3>Willkommen</h3><p>Beginne mit dem <b>Situationsplan</b>: Darauf umrandest du das Haus und gelangst mit einem Tipp zu dessen Grundrissen. Du kannst auch direkt ein Geschoss anlegen.</p><p><button class="b p" data-act="addSite">+ Situationsplan</button> <button class="b" data-act="addFloor">+ Geschoss</button></p></div>`;return}
@@ -1002,13 +1012,14 @@ function renderStage(){
     <button class="b ${SHOWLBL?'p':''}" data-act="togLbl" title="Pinbezeichnung neben dem Pin ein-/ausblenden">🏷️ ${SHOWLBL?'Namen ausblenden':'Namen einblenden'}</button>
     <button class="b ${UI.add?'p':''}" data-act="addPin">${UI.add?'Jetzt in den Plan klicken … (Esc)':'📍 Pin setzen'}</button>
     ${site?'<button class="b" data-act="markBld">🏠 Gebäude markieren</button>':'<button class="b" data-act="markRoom">▭ Zimmer zeichnen</button>'}
+    <button class="b ${UI.sv?'p':''}" data-act="surfView" title="Kontrolle: Pins nach Oberfläche einfärben, ohne Oberfläche = grau">🎨 Oberflächen</button>
     <select class="gfsel" data-ch="gf" title="Pins nach Gewerk hervorheben" style="${UI.gf?'color:'+GWC[UI.gf]:''}"><option value="">Alle Gewerke</option>${GEWERKE.map(g=>`<option ${UI.gf===g?'selected':''}>${g}</option>`).join('')}</select>`:''}
     <button class="b" data-act="planUp">${f.planId?'Plan ersetzen':'Plan hochladen'}</button>
     <button class="b d" data-act="delFloor">Löschen</button>`;
   if(!f.planId){st.innerHTML=`<div class="empty"><p>Für «${esc(f.name)}» ist noch kein Plan hinterlegt.</p><button class="b p" data-act="planUp">Plan hochladen (Bild oder PDF)</button></div>`;return}
   const dpts=isRoom&&UI.draw.pts.length===2?rectPts(UI.draw.pts):UI.draw?UI.draw.pts:[];
   const dr=drawing&&UI.draw.pts.length?`<svg class="areas" viewBox="0 0 1000 1000" preserveAspectRatio="none"><polygon class="dr" points="${ptsStr(dpts)}"/></svg>${UI.draw.pts.map(([x,y])=>`<span class="dot" style="left:${x*100}%;top:${y*100}%"></span>`).join('')}`:'';
-  st.innerHTML=`<div class="plan ${UI.add||drawing?'adding':''}" style="width:${UI.zoom*100}%"><img src="${urlOf(f.planId)}" alt="Plan" draggable="false">${areasHtml(f)}${dr}${pinsOf(f.id).map(p=>{const hit=UI.gf&&pinGewerke(p).includes(UI.gf);return `<div class="pin ${pinState(p)} ${UI.assign?(asgPhotos()&&asgPhotos().from===p.id?'asgsrc':(asgIsOn(p)?'asg':'asgoff')):''} ${p.id===UI.pin?'on':''} ${UI.gf?(hit?'hit':'dim'):''}" data-pin="${p.id}" style="left:${p.x*100}%;top:${p.y*100}%;${hit?'--c:'+GWC[UI.gf]:''}" title="${esc(p.title)}${p.title?' – ':''}${PIN_STATE_TXT[pinState(p)]}">${p.nr}${pinLbl(p)}</div>`}).join('')}</div>`;
+  st.innerHTML=`<div class="plan ${UI.add||drawing?'adding':''}" style="width:${UI.zoom*100}%"><img src="${urlOf(f.planId)}" alt="Plan" draggable="false">${areasHtml(f)}${dr}${pinsOf(f.id).map(p=>{const hit=UI.gf&&pinGewerke(p).includes(UI.gf);return `<div class="pin ${pinState(p)} ${UI.assign?(asgPhotos()&&asgPhotos().from===p.id?'asgsrc':(asgIsOn(p)?'asg':'asgoff')):''} ${p.id===UI.pin?'on':''} ${UI.gf?(hit?'hit':'dim'):''} ${UI.sv?'sv':''}" data-pin="${p.id}" style="left:${p.x*100}%;top:${p.y*100}%;${UI.sv?'--c:'+surfColor(p.surf):hit?'--c:'+GWC[UI.gf]:''}" title="${esc(p.title)}${p.title?' – ':''}${UI.sv?'Oberfläche: '+esc(p.surf||'keine'):PIN_STATE_TXT[pinState(p)]}">${p.nr}${pinLbl(p)}</div>`}).join('')}</div>`;
 }
 /* ---------- Beleg im Grundriss zuordnen ----------
    UI.assign={bid} : Pins antippen = Beleg zuordnen/entfernen (mehrere, Aufteilung nach Fläche)
@@ -1053,7 +1064,7 @@ function renderPinPanel(){
     const pins=pinsOf(UI.floor),cf=curFloor();
     const bl=isSite(cf)?`<div class="hd">Gebäude</div>${bldsSorted().map(b=>`<div class="bld"><input data-bld="${b.id}" value="${esc(b.name)}" title="Umbenennen"><small>${floorsOfBld(b.id).length} Geschoss(e)${b.area?'':' · noch keine Fläche'}</small><div class="bact"><button class="b sm" data-act="openBld" data-id="${b.id}">Öffnen</button><button class="b sm" data-act="redraw" data-id="${b.id}">Fläche ${b.area?'neu ':''}zeichnen</button><button class="b sm d" data-act="delBld" data-id="${b.id}">Löschen</button></div></div>`).join('')||'<p class="mut">Noch keine Gebäude. Tippe oben auf «🏠 Gebäude markieren» und dann auf die Ecken des Hauses.</p>'}<div style="height:14px"></div>`:'';
     const rl=!isSite(cf)&&cf.planId?`<div class="hd">Zimmer</div>${roomsOf(cf).map(r=>`<div class="bld"><input data-room="${r.id}" value="${esc(r.name)}" title="Umbenennen"><small>${pins.filter(p=>roomOfPin(p)===r).length} Pin(s)</small><div class="bact"><button class="b sm" data-act="redrawRoom" data-id="${r.id}">Fläche neu zeichnen</button><button class="b sm d" data-act="delRoom" data-id="${r.id}">Löschen</button></div></div>`).join('')||'<p class="mut" style="font-size:13px">Noch keine Zimmer. Oben «▭ Zimmer zeichnen» – bei Rechtecken genügen 2 Ecken.</p>'}<div style="height:14px"></div>`:'';
-    const pli=x=>`<div class="pli" data-act="selPin" data-id="${x.id}"><b class="${pinState(x)}" title="${PIN_STATE_TXT[pinState(x)]}">${x.nr}</b><span>${esc(x.title||'(ohne Titel)')}<small>${x.entries.length} ${x.entries.length===1?'Eintrag':'Einträge'} · ${pinPhotos(x).length} Foto(s)${pinBelegIds(x).length?' · '+pinBelegIds(x).length+' Beleg(e)':''}${pinGewerke(x).length?'<br>'+gwDots(pinGewerke(x)):''}</small></span></div>`;
+    const pli=x=>`<div class="pli" data-act="selPin" data-id="${x.id}"><b class="${pinState(x)}" title="${UI.sv?'Oberfläche: '+esc(x.surf||'keine'):PIN_STATE_TXT[pinState(x)]}" ${UI.sv?`style="background:${surfColor(x.surf)}"`:''}>${x.nr}</b><span>${esc(x.title||'(ohne Titel)')}<small>${x.entries.length} ${x.entries.length===1?'Eintrag':'Einträge'} · ${pinPhotos(x).length} Foto(s)${pinBelegIds(x).length?' · '+pinBelegIds(x).length+' Beleg(e)':''}${pinGewerke(x).length?'<br>'+gwDots(pinGewerke(x)):''}</small></span></div>`;
     const gr=pinGroups(cf,pins);
     el.innerHTML=`${bl}${rl}<div class="hd">Einträge ${esc(floorLabel(cf))}</div>${pins.length?gr.map(g=>(gr.length>1||g.room?`<div class="rgh"><span>${g.room?'▭ '+esc(g.room.name):'Ohne Zimmer'}</span><span>${g.pins.length}</span></div>`:'')+g.pins.map(pli).join('')).join(''):'<p class="mut">Noch keine Pins. Klicke oben auf «📍 Pin setzen» und dann auf die Stelle im Grundriss.</p>'}`;
     return}
@@ -1499,6 +1510,7 @@ const ACT={
   zin:()=>applyZoom(UI.zoom*1.25),
   zout:()=>applyZoom(UI.zoom/1.25),
   addPin:()=>{UI.add=!UI.add;renderStage()},
+  surfView:()=>{UI.sv=!UI.sv;renderPlan()},
   mvStart:()=>{if(!UI.pin)return;UI.mvPin=UI.pin;UI.add=false;UI.draw=null;UI.assign=null;if(isSite(curFloor())){const f=orderedFloors().find(x=>!isSite(x));if(f)UI.floor=f.id}renderPlan();toast('Ziel-Grundriss wählen und Position antippen',3500)},
   mvCancel:()=>{const id=UI.mvPin;UI.mvPin=null;const p=pinById(id);if(p){UI.floor=p.floorId;UI.pin=id}renderPlan()},
   planUp:()=>$('#planInput').click(),
