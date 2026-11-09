@@ -558,7 +558,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='42 (09.11.2026, Datum je Position)';
+const APP_VERSION='43 (09.11.2026, Eingabefelder Belege stabil)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1333,7 +1333,19 @@ function filteredBelege(){const q=UI.q.trim().toLowerCase();
   return out.sort((a,b)=>{const x=val(a),y=val(b),ex=x===''||x==null,ey=y===''||y==null;if(ex!==ey)return ex?1:-1;return ((typeof x==='number'&&typeof y==='number')?x-y:String(x).localeCompare(String(y),'de'))*d||a.nr-b.nr})}
 const bfActive=()=>Object.values(UI.bfl).some(Boolean)||UI.fy||UI.q||UI.fd;
 function bth(k,label,st){const on=UI.bs.k===k;return `<th class="srt ${on?'on':''}" data-act="bsort" data-id="${k}" ${st?`style="${st}"`:''} title="Sortieren">${label}<i>${on?(UI.bs.d>0?'▲':'▼'):'↕'}</i></th>`}
-function renderBelege(){
+/* Beim Neuzeichnen der Beleg-Liste bleibt das Eingabefeld, in dem gerade getippt wird, aktiv (Fokus + Cursor) */
+function renderBelege(){const v=$('#v-belege'),a=document.activeElement;let sel=null,pos=null,sc=null;
+  if(v&&a&&v.contains(a)&&/INPUT|TEXTAREA|SELECT/.test(a.tagName)){const tr=a.closest('tr[data-id]');
+    sel=Object.entries(a.dataset).map(([k,x])=>`[data-${k.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}="${CSS.escape(x)}"]`).join('');
+    if(sel){sel=a.tagName.toLowerCase()+sel;if(!a.dataset.b&&tr)sel=`tr[data-id="${CSS.escape(tr.dataset.id)}"] `+sel}
+    try{pos=[a.selectionStart,a.selectionEnd]}catch(_){}}
+  const tw=v&&v.querySelector('.tw');if(tw)sc=[tw.scrollLeft,tw.scrollTop];
+  _renderBelege();
+  if(sc){const t2=v.querySelector('.tw');if(t2){t2.scrollLeft=sc[0];t2.scrollTop=sc[1]}}
+  if(sel){const n=v.querySelector(sel);if(n){n.focus({preventScroll:true});if(pos&&pos[0]!=null)try{n.setSelectionRange(pos[0],pos[1])}catch(_){}}}}
+/* Datumsfelder: beim Eintippen der Jahreszahl entstehen Zwischenwerte (0002, 0020 …) – erst ein plausibles Datum speichern */
+const dateOk=v=>!v||(/^\d{4}-\d{2}-\d{2}$/.test(v)&&+v.slice(0,4)>=1990&&+v.slice(0,4)<=2100);
+function _renderBelege(){
   const years=[...new Set(S.belege.map(b=>(b.date||'').slice(0,4)).filter(Boolean))].sort();
   const list=filteredBelege();const sum=list.reduce((s,b)=>s+(+b.amount||0),0);const dm=dupMap();
   const fn=id=>floorLabel(floorById(id));
@@ -1672,7 +1684,10 @@ const UP={workXls:fs=>importWorkXls(fs[0]),plan:fs=>uploadPlan(fs[0]),pinPhotos:
 
 document.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(!a||!ACT[a.dataset.act])return;
   if(a.tagName==='A'||a.tagName==='BUTTON')e.preventDefault();ACT[a.dataset.act](a.dataset.id,a,e)});
+/* Datumsfeld wird beim Tippen kurz leer – leer erst übernehmen, wenn das Feld verlassen wird */
+document.addEventListener('focusout',e=>{const t=e.target;if(t&&t.type==='date'&&t.dataset.pendEmpty){delete t.dataset.pendEmpty;if(!t.value)setTimeout(()=>t.dispatchEvent(new Event('change',{bubbles:true})),0)}});
 document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
+  if(t.type==='date'&&(d.bi||d.bf)){if(!t.value&&document.activeElement===t){t.dataset.pendEmpty='1';return}if(!dateOk(t.value))return}
   if(d.surf){const p=pinById(UI.pin);if(!p)return;let v=t.value;if(v==='__new'){v=await newSurf();if(!v){renderPinPanel();return}}touch('pins',p.id);if(v)p.surf=v;else delete p.surf;await dbPut('pins',p);await relinkSurf();renderPinPanel();renderStage();
     const n=S.belege.reduce((x,b)=>x+(b.items||[]).filter(it=>it.pin==='o'&&it.surf===v).length,0);toast(v?`Oberfläche «${v}»${n?` – ${n} Beleg-Position(en) werden jetzt auch auf diesen Pin verteilt`:''}`:'Oberfläche entfernt',3000);return}
   if(d.up){const files=[...t.files];t.value='';if(files.length)await UP[d.up](files);return}
@@ -1706,7 +1721,7 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
     const n=t.value.trim();if(n===g.n)return;if(!n||l.some((x,k)=>k!==i&&x.n.toLowerCase()===n.toLowerCase())){toast(n?'Dieses Gewerk gibt es schon':'Name darf nicht leer sein',3000);t.value=g.n;return}
     const old=g.n;g.n=n;await applyGwMap({[old]:n});await saveGwList(l);renderExport();toast(`«${old}» umbenannt in «${n}» – bestehende Einträge angepasst`,4000);return}
   if(d.bi){const b=belegById(d.b);if(!b||!b.items)return;const it=b.items[+d.ii];if(!it)return;
-    if(d.bi==='amount'){it.amount=parseAmount(t.value)}else if(d.bi==='date'){if(!t.value||t.value===b.date)delete it.date;else it.date=t.value}else if(d.bi==='pin'){let v=t.value;if(v==='m')return;if(v.startsWith('o:')){const old=it.pin;delete it.pins;it.pin='o';it.surf=v.slice(2);await syncItemLinks(b,old);await dbPut('belege',b);renderBelege();if(!surfPins(it.surf).length)toast(`Noch kein Pin hat die Oberfläche «${it.surf}» – im Pin unter «Oberfläche» wählen`,4500);return}if(v==='__multi'){ACT.asgStart(b.id,{dataset:{ii:d.ii}});return}if(v==='__new'){v=await newCost();if(!v){renderBelege();return}}const old=it.pin;delete it.pins;delete it.surf;it.pin=v;await syncItemLinks(b,old)}else it[d.bi]=t.value;
+    if(d.bi==='amount'){it.amount=parseAmount(t.value)}else if(d.bi==='date'){if(!dateOk(t.value))return;if(!t.value||t.value===b.date)delete it.date;else it.date=t.value;await dbPut('belege',b);t.classList.toggle('own',!!it.date);t.title=it.date?'eigenes Datum':'Datum des Belegs';if(!t.value)t.value=b.date||'';return}else if(d.bi==='pin'){let v=t.value;if(v==='m')return;if(v.startsWith('o:')){const old=it.pin;delete it.pins;it.pin='o';it.surf=v.slice(2);await syncItemLinks(b,old);await dbPut('belege',b);renderBelege();if(!surfPins(it.surf).length)toast(`Noch kein Pin hat die Oberfläche «${it.surf}» – im Pin unter «Oberfläche» wählen`,4500);return}if(v==='__multi'){ACT.asgStart(b.id,{dataset:{ii:d.ii}});return}if(v==='__new'){v=await newCost();if(!v){renderBelege();return}}const old=it.pin;delete it.pins;delete it.surf;it.pin=v;await syncItemLinks(b,old)}else it[d.bi]=t.value;
     if(b.auto&&d.bi!=='pin')b.auto.items=false;await dbPut('belege',b);renderBelege();return}
   if(d.stn||d.stc){const x=stList().find(y=>y.k===(d.stn||d.stc));if(!x)return;
     if(d.stn){const n=t.value.trim();if(!n||stList().some(y=>y.k!==x.k&&y.n.toLowerCase()===n.toLowerCase())){toast(n?'Diesen Namen gibt es schon':'Name darf nicht leer sein',3000);t.value=x.n;return}x.n=n}else x.c=t.value;
@@ -1723,7 +1738,7 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(d.split){const b=belegById(t.closest('tr').dataset.id);if(!b)return;b.split=b.split||{};const v=parseAmount(t.value);if(v==='')delete b.split[d.split];else b.split[d.split]=v;await dbPut('belege',b);renderBelege();return}
   if(d.bf==='status'){const b=belegById(t.closest('tr').dataset.id);if(!b)return;let v=t.value;if(v==='__new'){v=await newStatus();if(!v){renderBelege();return}}
     b.status=v==='offen'?'':v;if(!b.status)delete b.status;await dbPut('belege',b);renderBelege();return}
-  if(d.bf){const b=belegById(t.closest('tr').dataset.id);if(!b)return;if(b.auto&&b.auto[d.bf]){b.auto[d.bf]=false;t.classList.remove('auto')}if(d.bf==='date')b.dateAuto=false;
+  if(d.bf){const b=belegById(t.closest('tr').dataset.id);if(!b)return;if(d.bf==='date'&&!dateOk(t.value))return;if(b.auto&&b.auto[d.bf]){b.auto[d.bf]=false;t.classList.remove('auto')}if(d.bf==='date')b.dateAuto=false;
     if(d.bf==='amount'){b.amount=parseAmount(t.value);t.value=b.amount===''?'':chf(b.amount)}
     else if(d.bf==='gewerk'){const old=b.gewerk||'';b.gewerk=t.value;for(const p of S.pins){let ch=false;for(const e of p.entries)if(e.belegIds.includes(b.id)&&(e.belegGw[b.id]||'')===old){e.belegGw[b.id]=b.gewerk;ch=true}if(ch)await dbPut('pins',p)}}
     else if(d.bf==='desc'){b.desc=t.value.slice(0,DESC_MAX);t.title=b.desc}
