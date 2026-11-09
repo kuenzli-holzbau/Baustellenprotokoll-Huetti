@@ -558,7 +558,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='44 (09.11.2026, Löschen bleibt gelöscht)';
+const APP_VERSION='45 (09.11.2026, Zusammenzug Holzbau pro Material und Stärke)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1856,6 +1856,25 @@ $('#stage').addEventListener('wheel',e=>{if(!e.ctrlKey||!$('#stage .plan'))retur
 
 /* ---------- PDF-Export ---------- */
 const allMats=()=>S.pins.flatMap(p=>p.entries.flatMap(e=>e.mats));
+/* Material und Stärke aus der Artikelbezeichnung: «OSB 3, N&K d:25mm» → OSB 3 · 25 mm; «Isover Uniroll 034 b:1200mm d:160mm» → Isover Uniroll 034 · 160 mm */
+const HOLZARTEN=/\b(Fichte|Tanne|Lärche|Eiche|Buche|Kiefer|Douglasie|Esche|Nussbaum|Arve|Ahorn|Birke|Thermo[- ]?\w+|Weisstanne|Seekiefer)\b/i;
+function matSplit(name){let n=String(name||'').replace(/\s+/g,' ').trim(),t='',m;
+  if(m=n.match(/\b[dD]\s*[:=]\s*(\d+(?:[.,]\d+)?)\s*mm/))t=m[1];
+  else if(m=n.match(/Stärke\s*(\d+(?:[.,]\d+)?)\s*mm/i))t=m[1];
+  else{const re=/(^|[^:=Ø\w.,/])(\d+(?:[.,]\d+)?)\s*mm\b/g;let x;while(x=re.exec(n)){const pre=n.slice(Math.max(0,x.index-3),x.index+x[1].length);if(/[bBlLhH]\s*[:=]\s*$/.test(pre))continue;t=x[2];break}
+    if(!t&&(m=n.match(/(?:^|[\s,])(\d+(?:[.,]\d+)?)\s*x\s*\d+(?:[.,]\d+)?\s*mm/)))t=m[1]}
+  const parts=n.split(',').map(x=>x.trim()).filter(Boolean),clean=x=>x.replace(/\b[dDbBlLhH]\s*[:=]\s*\d+(?:[.,]\d+)?\s*(?:-\s*\d+)?\s*m?m\b/g,'').replace(/\d+(?:[.,]\d+)?\s*x\s*\d+(?:[.,]\d+)?\s*mm/g,'').replace(/\b\d+(?:[.,]\d+)?\s*mm\b/g,'').replace(/\s+/g,' ').replace(/[\s:/-]+$/,'').trim();
+  let mat=clean(parts[0]||n);
+  if(parts[1]&&(mat.split(' ').length<2||/^(Fassadenschalungen|Täfer|Oberflächenbehandlung|Nut-Kamm-Boden|Terrassenboden|Schalung|Latten|Bretter|Kantholz)/i.test(mat)))mat+=', '+clean(parts[1]);
+  const sp=n.match(HOLZARTEN);if(sp&&!mat.toLowerCase().includes(sp[1].toLowerCase()))mat+=', '+sp[1];
+  return {mat:mat||n,t:t?t.replace(',','.'):''}}
+/* Zusammenzug Holzbau pro Material und Stärke (m², m³, m) für den Export */
+function holzSummary(ms){const g=new Map();for(const m of ms){if(!/^(m²|m2|m³|m3|m|lfm)$/i.test((m.unit||'').trim()))continue;const r=matSplit(m.name),k=[r.mat,r.t,m.unit].join('|');
+    const a=g.get(k)||{mat:r.mat,t:r.t,unit:m.unit,qty:0,chf:0,n:new Set()};a.qty+=(+m.qty||0);a.chf+=(+m.qty||0)*(+mPrice(m)||0);a.n.add(m.code||m.name);g.set(k,a)}
+  if(!g.size)return '';const rows=[...g.values()].sort((a,b)=>a.mat.localeCompare(b.mat,'de')||(+a.t||0)-(+b.t||0)||a.unit.localeCompare(b.unit));
+  return `<h3>Holzbau – Zusammenzug pro Material und Stärke</h3><table class="mt"><thead><tr><th>Material</th><th class="r">Stärke</th><th class="r">Menge</th><th>Einh.</th><th class="r">CHF</th></tr></thead><tbody>
+    ${rows.map(a=>`<tr><td>${esc(a.mat)}${a.n.size>1?` <small style="color:#666">(${a.n.size} Artikel)</small>`:''}</td><td class="r">${a.t?qfmt(+a.t)+' mm':'–'}</td><td class="r">${qfmt(Math.round(a.qty*100)/100)}</td><td>${esc(a.unit)}</td><td class="r">${chf(a.chf)}</td></tr>`).join('')}
+    <tr class="tot"><td colspan="4">Total</td><td class="r">${chf(rows.reduce((x,a)=>x+a.chf,0))}</td></tr></tbody></table>`}
 function matTable(ms,code){return `<table class="mt"><thead><tr>${code?'<th>Art.-Nr.</th>':''}<th>Material</th><th class="r">Menge</th><th>Einh.</th><th class="r">CHF/Einh.</th><th class="r">CHF</th></tr></thead><tbody>
   ${ms.map(m=>`<tr>${code?`<td>${esc(m.code||'–')}</td>`:''}<td>${esc(m.name)}${m.note&&!code?`<br><i style="color:#555">${esc(m.note)}</i>`:''}</td><td class="r">${qfmt(m.qty)}</td><td>${esc(m.unit)}</td><td class="r">${m.price==null?'':chf(mPrice(m))}</td><td class="r">${chf((+m.qty||0)*(+mPrice(m)||0))}</td></tr>`).join('')}
   <tr class="tot"><td colspan="${code?5:4}">Total</td><td class="r">${chf(matTotal(ms))}</td></tr></tbody></table>`}
@@ -1905,7 +1924,7 @@ async function doPrint(){
     for(const g of GEWERKE){const ms=all.filter(m=>(m.gw||'Holzbau')===g);if(!ms.length)continue;const agg=new Map();
       for(const m of ms){const k=[m.code,m.name,m.unit,m.price].join('|');const a=agg.get(k)||Object.assign({},m,{qty:0,note:''});a.qty+=(+m.qty||0);agg.set(k,a)}
       const rows=[...agg.values()].sort((a,b)=>(a.code||'zzz').localeCompare(b.code||'zzz')||a.name.localeCompare(b.name));
-      h+=`<h3>${g}${supplierOf(g)!=='Regiepreisliste'?' <span style="font-weight:400;color:#666">· '+esc(supplierOf(g))+'</span>':''}</h3>${matTable(rows,true)}`}
+      h+=`<h3>${g}${supplierOf(g)!=='Regiepreisliste'?' <span style="font-weight:400;color:#666">· '+esc(supplierOf(g))+'</span>':''}</h3>${matTable(rows,true)}${g==='Holzbau'?holzSummary(ms):''}`}
     h+=`<h3>Total pro Gewerk</h3><table class="mt"><tbody>${GEWERKE.map(g=>{const t=matTotal(all.filter(m=>(m.gw||'Holzbau')===g));return t?`<tr><td>${g}</td><td class="r">CHF ${chf(t)}</td></tr>`:''}).join('')}<tr class="tot"><td>Total Material</td><td class="r">CHF ${chf(matTotal(all))}</td></tr></tbody></table>
     <h3>Nach Plan</h3><table class="mt"><tbody>${fl.map(f=>{const t=matTotal(pinsOf(f.id).flatMap(p=>p.entries.flatMap(e=>e.mats)));return t?`<tr><td>${esc(floorLabel(f))}</td><td class="r">CHF ${chf(t)}</td></tr>`:''}).join('')}</tbody></table></section>`}
   const bs=belegeByNr().filter(b=>!o.gw||belegHasGw(b,o.gw)),bAmt=b=>G?(gwAmounts(b).get(G)||0):(+b.amount||0);
