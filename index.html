@@ -553,7 +553,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='38 (09.11.2026, Gewerk je Position)';
+const APP_VERSION='39 (09.11.2026, Oberfläche je Pin)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -762,9 +762,16 @@ const genGuess=name=>/entsorg|mulde|deponie|kehricht|sperrgut|bauschutt|abfall|r
 /* Beleg-Zuordnung: b.cost (Kostenstelle) ODER Beleg-Pins (verknüpft, ohne die nur durch Positionen verknüpften b.itemLinks).
    Positionen mit it.pin='' erben die Beleg-Zuordnung (bei mehreren Pins nach Fläche); eigene Zuordnung überschreibt. */
 /* Position → mehrere Pins: it.pin='m' + it.pins=[Pin-IDs] (Aufteilung nach Fläche wie beim ganzen Beleg) */
-const itPinIds=it=>{if(!it)return [];if(it.pin==='m')return (it.pins||[]).filter(id=>pinById(id));return it.pin&&!isGen(it.pin)&&pinById(it.pin)?[it.pin]:[]};
-function setItPins(it,ids){ids=[...new Set(ids)].filter(id=>pinById(id));delete it.pins;if(!ids.length)it.pin='';else if(ids.length===1)it.pin=ids[0];else{it.pin='m';it.pins=ids}}
-const itTargetTxt=it=>{if(isGen(it.pin))return genList().find(g=>g.k===it.pin).n;const ps=itPinIds(it).map(pinById);return ps.length?'Pin '+ps.map(p=>p.nr).join(', '):''};
+/* Oberfläche je Pin (p.surf): Holz, Verputz, Fliesen + eigene in S.project.surfs. Position «Oberfläche X» (it.pin='o', it.surf=X) gehört allen Pins mit dieser Oberfläche */
+const SURF_BASE=['Holz','Verputz','Fliesen'];
+const surfList=()=>[...SURF_BASE,...(Array.isArray(S.project.surfs)?S.project.surfs:[]).filter(x=>x&&!SURF_BASE.includes(x))];
+const surfPins=n=>S.pins.filter(p=>p.surf===n);
+async function newSurf(){const n=(prompt('Name der neuen Oberfläche (z.B. Gipskarton, Beton):','')||'').trim();if(!n)return '';const ex=surfList().find(x=>x.toLowerCase()===n.toLowerCase());if(ex)return ex;
+  S.project.surfs=Array.isArray(S.project.surfs)?S.project.surfs:[];S.project.surfs.push(n);await dbPut('kv',S.project);toast(`Oberfläche «${n}» angelegt`,2500);return n}
+async function relinkSurf(){for(const b of S.belege)if((b.items||[]).some(it=>it.pin==='o')){await syncItemLinks(b,'');await dbPut('belege',b)}}
+const itPinIds=it=>{if(!it)return [];if(it.pin==='o')return surfPins(it.surf).map(p=>p.id);if(it.pin==='m')return (it.pins||[]).filter(id=>pinById(id));return it.pin&&!isGen(it.pin)&&pinById(it.pin)?[it.pin]:[]};
+function setItPins(it,ids){ids=[...new Set(ids)].filter(id=>pinById(id));delete it.pins;delete it.surf;if(!ids.length)it.pin='';else if(ids.length===1)it.pin=ids[0];else{it.pin='m';it.pins=ids}}
+const itTargetTxt=it=>{if(isGen(it.pin))return genList().find(g=>g.k===it.pin).n;if(it.pin==='o')return `Oberfläche ${it.surf} (${surfPins(it.surf).length} Pins)`;const ps=itPinIds(it).map(pinById);return ps.length?'Pin '+ps.map(p=>p.nr).join(', '):''};
 /* Gewerk je Position: it.gw ('' = wie Beleg). Beträge pro Gewerk inkl. anteiligem Rest (MWST/Rundung/Rabatt) */
 const itGw=(b,it)=>(it&&it.gw)||b.gewerk||'';
 const belegHasGw=(b,G)=>{const its=(b.items||[]).filter(it=>+it.amount);return its.length?its.some(it=>itGw(b,it)===G):(b.gewerk||'')===G};
@@ -780,8 +787,8 @@ function belegBreakdown(b){const pins=S.pins.filter(p=>pinBelegIds(p).includes(b
   const its=(b.items||[]).filter(it=>it.amount!==''&&it.amount!=null&&+it.amount),bc=belegCost(b),bp=bc?[]:belegPins(b);
   const addGen=(k,v)=>{res.gen[k]=c2((res.gen[k]||0)+v);if(k===ALLG)res.allg=res.gen[k]};
   if(its.length){res.hasItems=true;const base=new Map();let sumI=0;
-    for(const it of its){const a=+it.amount;sumI=c2(sumI+a);const ips=isGen(it.pin)?[]:itPinIds(it),own=isGen(it.pin)?it.pin:(ips.length===1?ips[0]:'');let im=new Map(),inh=!own&&ips.length<2;
-      if(ips.length>1){const r=distribute(a,ips.map(pinById),b,new Map());im=r.out;res.area=res.area||r.area}else if(own)im.set(own,a);else if(bc)im.set(bc,a);else if(bp.length){const r=distribute(a,bp,b,new Map());im=r.out;res.area=res.area||r.area}
+    for(const it of its){const a=+it.amount;sumI=c2(sumI+a);const ips=isGen(it.pin)?[]:itPinIds(it),own=isGen(it.pin)?it.pin:(ips.length===1?ips[0]:'');let im=new Map(),inh=!own&&ips.length<2&&it.pin!=='o';
+      if(ips.length>1){const r=distribute(a,ips.map(pinById),b,new Map());im=r.out;res.area=res.area||r.area}else if(own)im.set(own,a);else if(it.pin==='o'){}else if(bc)im.set(bc,a);else if(bp.length){const r=distribute(a,bp,b,new Map());im=r.out;res.area=res.area||r.area}
       if(!im.size){res.open=c2(res.open+a);res.openN++}for(const [k,v] of im)base.set(k,c2((base.get(k)||0)+v));res.items.push({it,k:own||(im.size===1?[...im.keys()][0]:''),m:im,inh})}
     res.rest=c2(amt-sumI);const bt=[...base.values()].reduce((x,y)=>x+y,0),keys=[...base.keys()];let acc=0;res.bt=bt;
     keys.forEach((k,i)=>{const r=!res.rest||!bt?0:(i===keys.length-1?c2(res.rest-acc):c2(res.rest*base.get(k)/bt));acc=c2(acc+r);res.restMap.set(k,r);
@@ -1054,6 +1061,7 @@ function renderPinPanel(){
   const entHtml=entriesOf(p).map(x=>e&&x.id===e.id?entryEditor(p,x):`<div class="ent c ${entKind(x)}" data-act="selEntry" data-id="${x.id}"><b>${esc(entLabel(p,x))}<small class="mut" style="font-weight:400">${entDateSfx(x)}</small></b><span>${esc((x.note||'').split('\n')[0]||'–')}</span><small class="mut">${[x.photoIds.length?'📷'+x.photoIds.length:'',x.belegIds.length?'🧾'+x.belegIds.length:'',entM2(x)?'📐 '+qfmt(entM2(x))+' m²':'',x.mats.length?'🪵 CHF '+chf(matTotal(x.mats)):''].filter(Boolean).join(' ')}${entTags(x).length?'<br>'+gwDots(entTags(x)):''}</small>${p.entries.length>1?`<span class="emv"><button class="b sm" data-act="moveEntry" data-id="${x.id}" data-dir="-1" title="Nach oben" ${entNo(p,x)===1?'disabled':''}>▲</button><button class="b sm" data-act="moveEntry" data-id="${x.id}" data-dir="1" title="Nach unten" ${entNo(p,x)===p.entries.length?'disabled':''}>▼</button></span>`:''}</div>`).join('');
   el.innerHTML=`<div class="hd"><button class="b sm" data-act="closePin">‹ Alle Pins</button><button class="b sm" data-act="mvStart" title="In ein anderes Gebäude / einen anderen Grundriss verschieben">↗ Verschieben</button><span class="pnr">${p.nr}</span></div>
   <label>Titel / Raum<input data-f="title" value="${esc(p.title)}" placeholder="z.B. Bad OG – Wandanschluss"></label>
+  <label>Oberfläche<select data-surf="1"><option value="">– keine –</option>${surfList().map(n=>`<option ${p.surf===n?'selected':''}>${esc(n)}</option>`).join('')}<option value="__new">+ Neue Oberfläche …</option></select></label>
   ${roomsOf(floorById(p.floorId)).length?`<p class="proom">▭ Zimmer: ${roomOfPin(p)?esc(roomOfPin(p).name):'<span class="mut" style="font-weight:400">ausserhalb der Zimmerflächen</span>'}</p>`:''}
   <div class="entbar"><span class="lbl" style="margin:0">Einträge (${p.entries.length})</span><button class="b sm p" data-act="newEntry">+ Neuer Eintrag</button></div>
   ${entHtml}
@@ -1239,7 +1247,7 @@ function pdfItemRows(b,pid,G){const br=belegBreakdown(b);if(!br.hasItems)return 
   return br.items.filter(x=>x.m&&x.m.has(pid)&&(!G||itGw(b,x.it)===G)).map(x=>`<tr class="bip"><td></td><td colspan="4">↳ ${itemNo(b,(b.items||[]).indexOf(x.it))} ${esc(x.it.name)}${x.it.qty?' · '+esc(x.it.qty):''}${itGw(b,x.it)&&itGw(b,x.it)!==(b.gewerk||'')?' · <i>'+esc(itGw(b,x.it))+'</i>':''}</td><td class="r">${chf(x.it.amount)}</td><td class="r">${x.m.size>1?chf(x.m.get(pid)):''}</td></tr>`).join('')
     +(!G&&br.restMap.get(pid)?`<tr class="bip"><td></td><td colspan="4">↳ Anteil Rest (MWST/Rundung/Rabatt)</td><td class="r">${chf(br.restMap.get(pid))}</td><td class="r"></td></tr>`:'')}
 const belegTargetTxt=b=>{const bc=belegCost(b);if(bc)return genList().find(g=>g.k===bc).n;const bp=belegPins(b),fn=id=>floorLabel(floorById(id));return bp.length?bp.map(p=>fn(p.floorId)+' '+p.nr).join(', '):''};
-const itemPinSel=(b,i,it)=>{const v=it.pin||'',tt=belegTargetTxt(b);return `<select data-bi="pin" data-b="${b.id}" data-ii="${i}" class="${v||tt?'':'open'} ${v?'own':''}"><option value="" ${v?'':'selected'}>${tt?'wie Beleg → '+esc(tt):'– zuordnen –'}</option>${v==='m'?`<option value="m" selected>Mehrere: ${esc(itTargetTxt(it))} (nach Fläche)</option>`:''}<option value="__multi">📍 Mehrere Pins im Grundriss wählen …</option><optgroup label="Kostenstellen">${genList().map(g=>`<option value="${g.k}" ${v===g.k?'selected':''}>${esc(g.n)}</option>`).join('')}<option value="__new">+ Neue Kostenstelle …</option></optgroup>
+const itemPinSel=(b,i,it)=>{const v=it.pin||'',tt=belegTargetTxt(b);return `<select data-bi="pin" data-b="${b.id}" data-ii="${i}" class="${v||tt?'':'open'} ${v?'own':''}"><option value="" ${v?'':'selected'}>${tt?'wie Beleg → '+esc(tt):'– zuordnen –'}</option>${v==='m'?`<option value="m" selected>Mehrere: ${esc(itTargetTxt(it))} (nach Fläche)</option>`:''}<option value="__multi">📍 Mehrere Pins im Grundriss wählen …</option><optgroup label="Oberfläche (alle Pins damit, nach Fläche)">${surfList().map(n=>`<option value="o:${esc(n)}" ${v==='o'&&it.surf===n?'selected':''}>Oberfläche ${esc(n)} (${surfPins(n).length} Pins)</option>`).join('')}</optgroup><optgroup label="Kostenstellen">${genList().map(g=>`<option value="${g.k}" ${v===g.k?'selected':''}>${esc(g.n)}</option>`).join('')}<option value="__new">+ Neue Kostenstelle …</option></optgroup>
   ${orderedFloors().map(f=>{const ps=pinsOf(f.id);return ps.length?`<optgroup label="${esc(floorLabel(f))}">${ps.map(p=>`<option value="${p.id}" ${v===p.id?'selected':''}>${p.nr}${p.title?' – '+esc(p.title):''}</option>`).join('')}</optgroup>`:''}).join('')}</select>`};
 function itemsRow(b,pins){const br=belegBreakdown(b),its=b.items||[],sumI=c2(its.reduce((x,y)=>x+(+y.amount||0),0));
   return `<tr class="bitems"><td></td><td colspan="9"><table class="bit"><thead><tr><th>Nr.</th><th>Artikel</th><th>Menge</th><th class="r">CHF</th><th>Gewerk</th><th>gehört zu</th><th class="r">inkl. Rest</th><th></th></tr></thead><tbody>
@@ -1255,7 +1263,7 @@ function itemsRow(b,pins){const br=belegBreakdown(b),its=b.items||[],sumI=c2(its
 async function itemsFollowBeleg(b,ask){const own=(b.items||[]).filter(it=>it.pin);if(!own.length)return false;
   if(ask){const tt=belegTargetTxt(b);if(!tt)return false;const n=(b.items||[]).length,names=[...new Set(own.map(it=>itTargetTxt(it)||'?'))].join(', ');
     if(!confirm(`${own.length} von ${n} Position(en) haben eine eigene Zuordnung (${names}) und folgen deshalb «${tt}» nicht.\n\nSollen jetzt alle Positionen dem Beleg folgen?\n(Einzelne kannst du danach wieder ändern.)`))return false}
-  for(const it of own){it.pin='';delete it.pins}await syncItemLinks(b,'');await dbPut('belege',b);return true}
+  for(const it of own){it.pin='';delete it.pins;delete it.surf}await syncItemLinks(b,'');await dbPut('belege',b);return true}
 async function setBelegCost(b,k){for(const p of belegPins(b)){const e=entryWithBeleg(p,b.id);if(e)await unlinkBeleg(p,e,b.id)}b.cost=k;await dbPut('belege',b);toast(`Beleg → ${genList().find(g=>g.k===k).n}`,2500)}
 async function newCost(nm){const n=(nm!=null?nm:prompt('Name der neuen Kostenstelle (z.B. Gerüst, Transporte, Werkzeugmiete):')||'').trim();if(!n)return '';
   const ex=genList().find(g=>g.n.toLowerCase()===n.toLowerCase());if(ex)return ex.k;
@@ -1647,6 +1655,8 @@ const UP={workXls:fs=>importWorkXls(fs[0]),plan:fs=>uploadPlan(fs[0]),pinPhotos:
 document.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(!a||!ACT[a.dataset.act])return;
   if(a.tagName==='A'||a.tagName==='BUTTON')e.preventDefault();ACT[a.dataset.act](a.dataset.id,a,e)});
 document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
+  if(d.surf){const p=pinById(UI.pin);if(!p)return;let v=t.value;if(v==='__new'){v=await newSurf();if(!v){renderPinPanel();return}}touch('pins',p.id);if(v)p.surf=v;else delete p.surf;await dbPut('pins',p);await relinkSurf();renderPinPanel();renderStage();
+    const n=S.belege.reduce((x,b)=>x+(b.items||[]).filter(it=>it.pin==='o'&&it.surf===v).length,0);toast(v?`Oberfläche «${v}»${n?` – ${n} Beleg-Position(en) werden jetzt auch auf diesen Pin verteilt`:''}`:'Oberfläche entfernt',3000);return}
   if(d.up){const files=[...t.files];t.value='';if(files.length)await UP[d.up](files);return}
   if(d.bfl!==undefined&&t.tagName==='SELECT'){UI.bfl[d.bfl]=t.value;renderBelege();return}
   if(d.ch&&CH[d.ch]){CH[d.ch](t.value,t);return}
@@ -1678,7 +1688,7 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
     const n=t.value.trim();if(n===g.n)return;if(!n||l.some((x,k)=>k!==i&&x.n.toLowerCase()===n.toLowerCase())){toast(n?'Dieses Gewerk gibt es schon':'Name darf nicht leer sein',3000);t.value=g.n;return}
     const old=g.n;g.n=n;await applyGwMap({[old]:n});await saveGwList(l);renderExport();toast(`«${old}» umbenannt in «${n}» – bestehende Einträge angepasst`,4000);return}
   if(d.bi){const b=belegById(d.b);if(!b||!b.items)return;const it=b.items[+d.ii];if(!it)return;
-    if(d.bi==='amount'){it.amount=parseAmount(t.value)}else if(d.bi==='pin'){let v=t.value;if(v==='m')return;if(v==='__multi'){ACT.asgStart(b.id,{dataset:{ii:d.ii}});return}if(v==='__new'){v=await newCost();if(!v){renderBelege();return}}const old=it.pin;delete it.pins;it.pin=v;await syncItemLinks(b,old)}else it[d.bi]=t.value;
+    if(d.bi==='amount'){it.amount=parseAmount(t.value)}else if(d.bi==='pin'){let v=t.value;if(v==='m')return;if(v.startsWith('o:')){const old=it.pin;delete it.pins;it.pin='o';it.surf=v.slice(2);await syncItemLinks(b,old);await dbPut('belege',b);renderBelege();if(!surfPins(it.surf).length)toast(`Noch kein Pin hat die Oberfläche «${it.surf}» – im Pin unter «Oberfläche» wählen`,4500);return}if(v==='__multi'){ACT.asgStart(b.id,{dataset:{ii:d.ii}});return}if(v==='__new'){v=await newCost();if(!v){renderBelege();return}}const old=it.pin;delete it.pins;delete it.surf;it.pin=v;await syncItemLinks(b,old)}else it[d.bi]=t.value;
     if(b.auto&&d.bi!=='pin')b.auto.items=false;await dbPut('belege',b);renderBelege();return}
   if(d.stn||d.stc){const x=stList().find(y=>y.k===(d.stn||d.stc));if(!x)return;
     if(d.stn){const n=t.value.trim();if(!n||stList().some(y=>y.k!==x.k&&y.n.toLowerCase()===n.toLowerCase())){toast(n?'Diesen Namen gibt es schon':'Name darf nicht leer sein',3000);t.value=x.n;return}x.n=n}else x.c=t.value;
@@ -1837,7 +1847,7 @@ async function doPrint(){
     for(const p of grp.pins){const es=entriesOf(p).filter(eOk);
       const pb=belegeByNr().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||gwShare(b,p.id,G)));
       const bSum=pb.reduce((x,b)=>x+gwShare(b,p.id,G),0),mSum=matTotal(es.flatMap(e=>e.mats));rb+=bSum;rm+=mSum;
-      h+=`<section class="pinsec"><h2 class="pinh"><span class="enr" style="display:inline-flex;margin-right:2mm;vertical-align:middle">${p.nr}</span>${esc(p.title||'Ohne Titel')} <span style="font-weight:400;color:#666;font-size:11pt">· ${esc(floorLabel(f))}${grp.room?' · '+esc(grp.room.name):''}</span></h2>
+      h+=`<section class="pinsec"><h2 class="pinh"><span class="enr" style="display:inline-flex;margin-right:2mm;vertical-align:middle">${p.nr}</span>${esc(p.title||'Ohne Titel')} <span style="font-weight:400;color:#666;font-size:11pt">· ${esc(floorLabel(f))}${grp.room?' · '+esc(grp.room.name):''}${p.surf?' · Oberfläche '+esc(p.surf):''}</span></h2>
       <h3 class="ph">Fortschritte</h3>
       ${es.map(e=>`<div class="ent-p"><div class="edt">${esc(entLabel(p,e))}${entDateSfx(e)}${entTags(e).length?` <span style="font-weight:400;color:#555">· ${entTags(e).join(', ')}</span>`:''}</div>
         ${dimTxt(e)?`<p><i>Fläche:</i> ${dimTxt(e)}</p>${isShaped(e)?`<div class="wskp">${shapeSvg(e,200,120)}</div>`:''}`:''}${e.note?`<p>${nl2br(e.note)}</p>`:''}${e.material?`<p><i>Material:</i> ${nl2br(e.material)}</p>`:''}
