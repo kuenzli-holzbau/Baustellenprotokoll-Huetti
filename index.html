@@ -557,7 +557,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='40 (09.11.2026, Kontrollansicht Oberflächen)';
+const APP_VERSION='41 (09.11.2026, kombinierte Oberflächen halbe Fläche)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -738,8 +738,8 @@ const qfmt=n=>n===''||n==null?'':(+n).toLocaleString('de-CH',{maximumFractionDig
 const c2=n=>Math.round(n*100)/100;
 function pinAreaFor(p,b){const e=entryWithBeleg(p,b.id),a=e&&typeof entM2==='function'?+entM2(e)||0:0;if(a)return a;
   return typeof entM2==='function'?c2(p.entries.reduce((s,x)=>s+(+entM2(x)||0),0)):0}
-function distribute(amount,pins,b,into){const out=new Map();if(!pins.length||!amount)return {out,area:false};
-  const w=pins.map(p=>pinAreaFor(p,b)),area=pins.length>1&&w.every(x=>x>0),ww=area?w:pins.map(()=>1),tot=ww.reduce((x,y)=>x+y,0);let acc=0;
+function distribute(amount,pins,b,into,wf){const out=new Map();if(!pins.length||!amount)return {out,area:false};
+  const w=pins.map(p=>pinAreaFor(p,b)),area=pins.length>1&&w.every(x=>x>0),ww=(area?w:pins.map(()=>1)).map((x,i)=>wf?x*wf(pins[i]):x),tot=ww.reduce((x,y)=>x+y,0);let acc=0;
   pins.forEach((p,i)=>{const v=i===pins.length-1?c2(amount-acc):c2(amount*ww[i]/tot);acc=c2(acc+v);out.set(p.id,v);into.set(p.id,c2((into.get(p.id)||0)+v))});return {out,area}}
 /* Mit Positionen: jede Position gehört einem Pin oder zum «Allg. Verbrauchsmaterial» (it.pin = Pin-ID | 'allg' | '' = offen).
    Rest (Beleg − Positionen, z.B. MWST/Rundung) wird anteilig auf die zugeordneten Positionen verteilt. */
@@ -769,7 +769,10 @@ const genGuess=name=>/entsorg|mulde|deponie|kehricht|sperrgut|bauschutt|abfall|r
 /* Oberfläche je Pin (p.surf): Holz, Verputz, Fliesen + eigene in S.project.surfs. Position «Oberfläche X» (it.pin='o', it.surf=X) gehört allen Pins mit dieser Oberfläche */
 const SURF_BASE=['Holz','Verputz','Fliesen'];
 const surfList=()=>[...SURF_BASE,...(Array.isArray(S.project.surfs)?S.project.surfs:[]).filter(x=>x&&!SURF_BASE.includes(x))];
-const surfPins=n=>S.pins.filter(p=>p.surf===n);
+/* Kombinierte Oberfläche «Verputz + Fliesen»: zählt bei Verputz und bei Fliesen je mit dem halben Flächenanteil (bei 3 Teilen je 1/3) */
+const surfParts=n=>String(n||'').split('+').map(x=>x.trim().toLowerCase()).filter(Boolean);
+function surfWeight(p,n){if(!p.surf||!n)return 0;if(p.surf===n)return 1;const ps=surfParts(p.surf);return ps.length>1&&ps.includes(String(n).trim().toLowerCase())?1/ps.length:0}
+const surfPins=n=>S.pins.filter(p=>surfWeight(p,n)>0);
 const SURF_COL={Holz:'#b45309',Verputz:'#2563eb',Fliesen:'#0d9488'},SURF_PAL=['#9333ea','#db2777','#ca8a04','#0891b2','#65a30d','#7c3aed','#be123c','#4338ca'];
 const surfColor=n=>{if(!n||!surfList().includes(n))return '#9ca3af';if(SURF_COL[n])return SURF_COL[n];const i=surfList().filter(x=>!SURF_COL[x]).indexOf(n);return SURF_PAL[i%SURF_PAL.length]};
 function stLegend(f){const el=$('#stleg');if(!el)return;if(!UI.sv){el.innerHTML=`<div class="pleg"><span><i class="pin s0"></i>keine Einträge</span><span><i class="pin s1"></i>Bilder</span><span><i class="pin s2"></i>Bilder + Material</span></div>`;return}
@@ -797,7 +800,7 @@ function belegBreakdown(b){const pins=S.pins.filter(p=>pinBelegIds(p).includes(b
   const addGen=(k,v)=>{res.gen[k]=c2((res.gen[k]||0)+v);if(k===ALLG)res.allg=res.gen[k]};
   if(its.length){res.hasItems=true;const base=new Map();let sumI=0;
     for(const it of its){const a=+it.amount;sumI=c2(sumI+a);const ips=isGen(it.pin)?[]:itPinIds(it),own=isGen(it.pin)?it.pin:(ips.length===1?ips[0]:'');let im=new Map(),inh=!own&&ips.length<2&&it.pin!=='o';
-      if(ips.length>1){const r=distribute(a,ips.map(pinById),b,new Map());im=r.out;res.area=res.area||r.area}else if(own)im.set(own,a);else if(it.pin==='o'){}else if(bc)im.set(bc,a);else if(bp.length){const r=distribute(a,bp,b,new Map());im=r.out;res.area=res.area||r.area}
+      if(ips.length>1){const r=distribute(a,ips.map(pinById),b,new Map(),it.pin==='o'?(p=>surfWeight(p,it.surf)):null);im=r.out;res.area=res.area||r.area}else if(own)im.set(own,a);else if(it.pin==='o'){}else if(bc)im.set(bc,a);else if(bp.length){const r=distribute(a,bp,b,new Map());im=r.out;res.area=res.area||r.area}
       if(!im.size){res.open=c2(res.open+a);res.openN++}for(const [k,v] of im)base.set(k,c2((base.get(k)||0)+v));res.items.push({it,k:own||(im.size===1?[...im.keys()][0]:''),m:im,inh})}
     res.rest=c2(amt-sumI);const bt=[...base.values()].reduce((x,y)=>x+y,0),keys=[...base.keys()];let acc=0;res.bt=bt;
     keys.forEach((k,i)=>{const r=!res.rest||!bt?0:(i===keys.length-1?c2(res.rest-acc):c2(res.rest*base.get(k)/bt));acc=c2(acc+r);res.restMap.set(k,r);
