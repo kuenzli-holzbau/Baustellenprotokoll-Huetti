@@ -558,7 +558,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='43 (09.11.2026, Eingabefelder Belege stabil)';
+const APP_VERSION='44 (09.11.2026, Löschen bleibt gelöscht)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -2015,16 +2015,19 @@ async function push(){
   for(let i=0;i<rest.length;i+=150){const ch=rest.slice(i,i+150),rows=[],keep=[];
     /* Aktuellen Cloud-Stand dieser Datensätze holen: wurde er seit unserem letzten Stand von einem anderen Gerät geändert, wird zusammengeführt statt überschrieben */
     const rem=new Map();try{const rr=await (await api(`/rest/v1/${APP.table}?select=id,kind,data,deleted,updated_at&id=in.(${ch.map(e=>encodeURIComponent(e.recId)).join(',')})`)).json();for(const r of rr)rem.set(r.id,r)}catch(e){console.warn(e);throw e}
-    for(const e of ch){let rec=e.op==='put'?localRec(e.store,e.recId):null;const rm=rem.get(e.recId),base=SYNCBASE[e.recId],conflict=!!rm&&rm.updated_at!==base;
+    for(const e of ch){let rec=e.op==='put'?localRec(e.store,e.recId):null;const rm=rem.get(e.recId),base=SYNCBASE[e.recId];
+      /* Ohne bekannten Stand (Datensätze von vor der sicheren Synchronisierung): nur Konflikt, wenn die Cloud seit dem letzten Abgleich geändert wurde */
+      const conflict=!!rm&&(base!==undefined?rm.updated_at!==base:!(PULL_MARK&&new Date(rm.updated_at)<=new Date(PULL_MARK)));
       if(conflict){
-        if(!rec){if(!rm.deleted){await applyRemote(Object.assign({},rm,{kind:SYNC_KIND[e.store]}),new Set());SYNCBASE[rm.id]=rm.updated_at;keep.push(e);continue}}   // lokal gelöscht, anderswo geändert: Cloud-Stand behalten
-        else if(!rm.deleted&&rm.data&&e.store!=='kv'){rec=mergeRec(e.store,rm.data,rec);await rawPut(e.store,rec);const arr=S[e.store];if(arr){const k=arr.findIndex(x=>x.id===rec.id);if(k>=0)arr[k]=rec}mergedN++}
+        if(!rec){}   // hier gelöscht: Löschen gilt, auch wenn ein anderes Gerät den Datensatz inzwischen geändert hat
+        else if(rm.deleted&&e.store!=='kv'){await applyRemote(Object.assign({},rm,{kind:SYNC_KIND[e.store]}),new Set());SYNCBASE[rm.id]=rm.updated_at;await dequeueIf(e);delN++;continue}   // auf anderem Gerät gelöscht: bleibt gelöscht
+        else if(!rm.deleted&&rm.data&&e.store!=='kv'){rec=mergeRec(e.store,rm.data,rec);if(e.store==='pins')for(const en of rec.entries||[]){en.belegIds=(en.belegIds||[]).filter(id=>belegById(id));for(const k of Object.keys(en.belegGw||{}))if(!belegById(k))delete en.belegGw[k]}await rawPut(e.store,rec);const arr=S[e.store];if(arr){const k=arr.findIndex(x=>x.id===rec.id);if(k>=0)arr[k]=rec}mergedN++}
         else if(!rm.deleted&&rm.data&&e.store==='kv'){rec=mergeRec('kv',rm.data,rec);Object.assign(S.project,rec);await rawPut('kv',S.project);rec=S.project}}
       rows.push({id:e.recId,kind:SYNC_KIND[e.store],data:rec,deleted:!rec})}
     const back=await upsertItems(rows,true);for(const r of back||[])SYNCBASE[r.id]=r.updated_at;
     for(const e of ch)await dequeueIf(e)}
-  await saveBase();if(mergedN){softRender();toast(`${mergedN} Datensatz/-sätze mit Änderungen eines anderen Geräts zusammengeführt`,4000);mergedN=0}}
-let SYNCBASE={},mergedN=0,baseT=null;
+  await saveBase();if(delN){softRender();toast(`${delN} Datensatz/-sätze wurden auf einem anderen Gerät gelöscht und bleiben gelöscht`,4000);delN=0}if(mergedN){softRender();toast(`${mergedN} Datensatz/-sätze mit Änderungen eines anderen Geräts zusammengeführt`,4000);mergedN=0}}
+let delN=0,SYNCBASE={},mergedN=0,baseT=null,PULL_MARK=null;
 const SNAP_KEEP=15;
 const snapKeys=()=>new Promise(res=>{try{tx('snap','readonly',st=>{const r=st.getAllKeys();r.onsuccess=()=>res((r.result||[]).map(k=>({id:k,t:+String(k).slice(1)})));r.onerror=()=>res([])})}catch(_){res([])}});
 let lastSnapT=null;
@@ -2073,7 +2076,7 @@ async function applyRemote(r,pending){
   if(i>=0)arr[i]=d;else arr.push(d);await rawPut(store,d);return true}
 async function pull(){
   await takeSnap('sync');
-  const since=SYNCMETA.lastPull?new Date(new Date(SYNCMETA.lastPull).getTime()-60000).toISOString():null;
+  const since=SYNCMETA.lastPull?new Date(new Date(SYNCMETA.lastPull).getTime()-60000).toISOString():null;PULL_MARK=since;
   const pending=new Set((await dbAll('queue')).map(e=>e.id));let off=0,maxT=SYNCMETA.lastPull,changed=false,skipMin=null;
   for(;;){const rows=await (await api(`/rest/v1/${APP.table}?select=id,kind,data,deleted,updated_at${since?'&updated_at=gt.'+encodeURIComponent(since):''}&order=updated_at.asc,id.asc&limit=1000&offset=${off}`)).json();
     for(const r of rows){if(!maxT||new Date(r.updated_at)>new Date(maxT))maxT=r.updated_at;const k=(STORE_OF[r.kind]||'')+'|'+r.id;if(!pending.has(k)&&recentlyTouched(k)){if(!skipMin||new Date(r.updated_at)<new Date(skipMin))skipMin=r.updated_at;continue}if(!pending.has(k))SYNCBASE[r.id]=r.updated_at;if(await applyRemote(r,pending))changed=true}
