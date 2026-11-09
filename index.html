@@ -567,7 +567,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='48 (09.11.2026, Arbeitszeit-Code pro Mitarbeiter)';
+const APP_VERSION='49 (09.11.2026, Arbeitszeit nur Tagesstunden)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1179,12 +1179,12 @@ const quarterOf=d=>d&&/^\d{4}-\d{2}/.test(d)?d.slice(0,4)+'-Q'+Math.ceil(+d.slic
 const workQuarters=()=>[...new Set(workOfMa().map(w=>quarterOf(w.date)).filter(Boolean))].sort();
 const qRange=q=>{const y=+q.slice(0,4),n=+q.slice(-1),m=(n-1)*3;const pad2=x=>String(x).padStart(2,'0'),last=new Date(Date.UTC(y,m+3,0)).getUTCDate();return [`${y}-${pad2(m+1)}-01`,`${y}-${pad2(m+3)}-${pad2(last)}`]};
 const qLabel=q=>{const [a,b]=qRange(q);return `${q.slice(-1)}. Quartal ${q.slice(0,4)} (${fmtDate(a)} – ${fmtDate(b)})`};
-function workRepHtml(title,sub,ws,period){const P=S.project,wd=d=>d?['So','Mo','Di','Mi','Do','Fr','Sa'][new Date(d+'T12:00').getDay()]:'',multi=new Set(ws.map(maOf)).size>1;
+function workRepHtml(title,sub,ws,period){const tz=ws.some(w=>w.von||w.bis),P=S.project,wd=d=>d?['So','Mo','Di','Mi','Do','Fr','Sa'][new Date(d+'T12:00').getDay()]:'',multi=new Set(ws.map(maOf)).size>1;
   return `<section class="qr"><div class="qrh"><div class="qt" style="text-align:left"><b>${esc(title)}</b><span>${esc(sub)}</span></div></div>
     <table class="qri"><tbody><tr><td>Projekt</td><td><b>${esc(P.name||APP.title)}</b></td></tr>${P.address?`<tr><td>Adresse</td><td>${esc(P.address)}</td></tr>`:''}<tr><td>Bauherr</td><td>${esc(bauherr())}</td></tr>${UI.wm&&UI.wm!=='-'?`<tr><td>Mitarbeiter</td><td><b>${esc(maName(UI.wm))}</b></td></tr>`:''}${P.author?`<tr><td>Erstellt von</td><td>${esc(P.author)}</td></tr>`:''}</tbody></table>
-    <table class="qrt"><thead><tr><th>Datum</th>${multi?'<th>Mitarbeiter</th>':''}<th>Von</th><th>Bis</th><th class="r">Pause</th><th class="r">Std.</th><th>Tätigkeit</th><th class="r">Ansatz</th><th class="r">CHF</th></tr></thead><tbody>
-    ${ws.map(w=>`<tr><td style="white-space:nowrap">${wd(w.date)} ${fmtDate(w.date)}</td>${multi?`<td>${esc(maName(maOf(w)))}</td>`:''}<td>${esc(w.von||'')}</td><td>${esc(w.bis||'')}</td><td class="r">${w.pause?w.pause+' min':''}</td><td class="r">${chf(workHours(w))}</td><td>${esc(w.note||'')}</td><td class="r">${chf(workRate(w))}</td><td class="r">${chf(workCost(w))}</td></tr>`).join('')}
-    <tr class="tot"><td colspan="${multi?5:4}">Total ${ws.length} Einsätze</td><td class="r">${chf(sumH(ws))}</td><td></td><td></td><td class="r">${chf(sumC(ws))}</td></tr></tbody></table>
+    <table class="qrt"><thead><tr><th>Datum</th>${multi?'<th>Mitarbeiter</th>':''}${tz?'<th>Von</th><th>Bis</th><th class="r">Pause</th>':''}<th class="r">Std.</th><th>Tätigkeit</th><th class="r">Ansatz</th><th class="r">CHF</th></tr></thead><tbody>
+    ${ws.map(w=>`<tr><td style="white-space:nowrap">${wd(w.date)} ${fmtDate(w.date)}</td>${multi?`<td>${esc(maName(maOf(w)))}</td>`:''}${tz?`<td>${esc(w.von||'')}</td><td>${esc(w.bis||'')}</td><td class="r">${w.pause?w.pause+' min':''}</td>`:''}<td class="r">${chf(workHours(w))}</td><td>${esc(w.note||'')}</td><td class="r">${chf(workRate(w))}</td><td class="r">${chf(workCost(w))}</td></tr>`).join('')}
+    <tr class="tot"><td colspan="${(multi?2:1)+(tz?3:0)}">Total ${ws.length} Einsätze</td><td class="r">${chf(sumH(ws))}</td><td></td><td></td><td class="r">${chf(sumC(ws))}</td></tr></tbody></table>
     ${multi?`<table class="qrt" style="width:auto;margin-top:4mm"><tbody>${[...new Set(ws.map(maOf))].map(k=>{const l=ws.filter(w=>maOf(w)===k);return `<tr><td>${esc(maName(k))}</td><td class="r">${chf(sumH(l))} h</td><td class="r">CHF ${chf(sumC(l))}</td></tr>`}).join('')}</tbody></table>`:''}
     <div class="qrs"><p>Die aufgeführten Arbeitsstunden${period?' für den Zeitraum '+period:''} werden bestätigt.</p>
       <div class="sg"><div><div class="ln"></div><small>Ort, Datum</small></div><div><div class="ln"></div><small>Unterschrift Bauherr: ${esc(bauherr())}</small></div></div></div></section>`}
@@ -1197,20 +1197,20 @@ async function doWorkList(){const ws=workFiltered();if(!ws.length)return toast('
   printWork(workRepHtml('Arbeitszeitliste – '+who,(UI.wy?'Jahr '+UI.wy+' · ':'')+per,ws,per),`Arbeitszeitliste ${who}${UI.wy?' '+UI.wy:''} – ${S.project.name||APP.title}`)}
 /* neue Zeile unten in der Tabelle: direkt weitere Zeiten erfassen */
 const WNEW={date:'',von:'',bis:'',pause:'',h:'',note:'',ma:''};
-function wNewRow(r,showMa){const d=WNEW.date||(()=>{const l=workFiltered();return l.length?l[l.length-1].date:today()})();
+function wNewRow(r,showMa,tz){const d=WNEW.date||(()=>{const l=workFiltered();return l.length?l[l.length-1].date:today()})();
   return `<tr class="wnew"><td><input type="date" data-nw="date" value="${esc(d)}"></td>${showMa?`<td><select data-nw="ma">${maList().map(m=>`<option value="${m.k}" ${WNEW.ma===m.k?'selected':''}>${esc(m.n)}</option>`).join('')}<option value="" ${WNEW.ma?'':'selected'}>– ohne MA –</option></select></td>`:''}
-    <td><input class="tm" data-nw="von" inputmode="numeric" value="${esc(WNEW.von)}" placeholder="0730"></td><td><input class="tm" data-nw="bis" inputmode="numeric" value="${esc(WNEW.bis)}" placeholder="1700"></td>
-    <td><input class="tm" data-nw="pause" inputmode="numeric" value="${esc(WNEW.pause)}"></td><td><input class="nm" data-nw="h" inputmode="decimal" value="${esc(WNEW.h)}" placeholder="Std."></td>
+    ${tz?`<td><input class="tm" data-nw="von" inputmode="numeric" value="${esc(WNEW.von)}" placeholder="0730"></td><td><input class="tm" data-nw="bis" inputmode="numeric" value="${esc(WNEW.bis)}" placeholder="1700"></td>
+    <td><input class="tm" data-nw="pause" inputmode="numeric" value="${esc(WNEW.pause)}"></td>`:''}<td><input class="nm" data-nw="h" inputmode="decimal" value="${esc(WNEW.h)}" placeholder="Std."></td>
     <td class="mut r" style="font-size:12px">${chf(UI.wm&&UI.wm!=='-'&&maById(UI.wm)&&maById(UI.wm).rate!==''&&maById(UI.wm).rate!=null?maById(UI.wm).rate:r)}</td><td></td><td><input data-nw="note" value="${esc(WNEW.note)}" placeholder="Tätigkeit – Enter = hinzufügen"></td>
     <td><button class="b p sm" data-act="wAdd" title="Zeile hinzufügen (Enter)">＋</button></td></tr>`}
 async function wAddNew(){const tr=document.querySelector('#v-arbeit tr.wnew:not(.done)');if(!tr)return;const v=k=>{const el=tr.querySelector(`[data-nw="${k}"]`);return el?el.value.trim():''};
   const von=v('von')?parseTime(v('von')):'',bis=v('bis')?parseTime(v('bis')):'';if(von===null||bis===null){toast('Zeit bitte ohne Doppelpunkt eingeben, z.B. 0730 oder 1700',4000);return}
   const w={id:uid(),t:Date.now(),date:v('date')||today(),von:von||'',bis:bis||'',pause:parseInt(v('pause').replace(/\D/g,''),10)||'',h:v('h')?parseAmount(v('h')):'',rate:'',note:v('note'),by:SES?SES.email:'',ma:UI.wm&&UI.wm!=='-'?UI.wm:(tr.querySelector('[data-nw="ma"]')?v('ma'):'')};
-  if(!workHours(w)){toast('Bitte Von/Bis oder Stunden eingeben',3000);const f=tr.querySelector('[data-nw="von"]');if(f)f.focus();return}
+  if(!workHours(w)){toast('Bitte die Stunden eingeben',3000);const f=tr.querySelector('[data-nw="h"]');if(f)f.focus();return}
   tr.classList.add('done');S.work.push(w);await dbPut('work',w);Object.assign(WNEW,{date:w.date,von:'',bis:'',pause:'',h:'',note:'',ma:w.ma});if(UI.wy&&!w.date.startsWith(UI.wy))UI.wy='';renderArbeit();
-  const f=document.querySelector('#v-arbeit tr.wnew [data-nw="von"]');if(f){f.scrollIntoView({block:'nearest'});f.focus()};toast(`✓ ${fmtDate(w.date)} · ${hfmt(workHours(w))} erfasst`,1800)}
+  const f=document.querySelector('#v-arbeit tr.wnew [data-nw="h"]');if(f){f.scrollIntoView({block:'nearest'});f.focus()};toast(`✓ ${fmtDate(w.date)} · ${hfmt(workHours(w))} erfasst`,1800)}
 function renderArbeit(){
-  const all=workSorted(),mas=maList(),years=[...new Set(workOfMa().map(w=>(w.date||'').slice(0,4)).filter(Boolean))].sort(),list=workFiltered(),r=projRate(),showMa=!UI.wm&&mas.length>0,cur=UI.wm&&UI.wm!=='-'?maById(UI.wm):null;
+  const tz=S.work.some(w=>w.von||w.bis),all=workSorted(),mas=maList(),years=[...new Set(workOfMa().map(w=>(w.date||'').slice(0,4)).filter(Boolean))].sort(),list=workFiltered(),r=projRate(),showMa=!UI.wm&&mas.length>0,cur=UI.wm&&UI.wm!=='-'?maById(UI.wm):null;
   if(UI.wm&&UI.wm!=='-'&&!cur)UI.wm='';
   const noMa=all.filter(w=>!maOf(w)),cnt=k=>all.filter(w=>maOf(w)===k);
   const chip=(k,label,ws,c)=>`<button class="tagb ${UI.wm===k?'on':''}" style="--c:${c||'#1f2328'}" data-act="wmSet" data-id="${k}">${label} <small style="opacity:.75">${ws.length?hfmt(sumH(ws)):''}</small></button>`;
@@ -1225,18 +1225,18 @@ function renderArbeit(){
     <button class="b" data-act="wList" title="Liste der angezeigten Einsätze drucken / als PDF speichern">🖨 Liste</button>
     <span class="wrate">Bauherr <input data-pf="bauherr" value="${esc(bauherr())}" style="width:160px;text-align:left"></span>
     <span class="sp"></span><span class="sum" id="wsum">${workSumText()}</span></div>
-    <p class="mut" style="font-size:12px;margin:0 0 10px">Zeiten ohne Doppelpunkt eingeben (0730, 1700). Mit Von/Bis rechnet die App die Stunden selbst, sonst Stunden direkt eintragen. Neue Zeiten unten in der leeren Zeile erfassen – Enter fügt sie hinzu. Ansatz leer = Ansatz des MA bzw. Stundenansatz oben.</p>
-    <div class="tw"><table class="bt wt" style="min-width:880px"><thead><tr><th style="width:140px">Datum</th>${showMa?'<th style="width:180px">Mitarbeiter</th>':''}<th>Von</th><th>Bis</th><th>Pause Min</th><th class="r" style="width:80px">Std.</th><th class="r" style="width:90px">Ansatz</th><th class="r" style="width:100px">CHF</th><th>Bemerkung</th><th></th></tr></thead><tbody>
+    <p class="mut" style="font-size:12px;margin:0 0 10px">Neue Tage unten in der leeren Zeile erfassen: Datum, Stunden, Tätigkeit – Enter fügt sie hinzu. Stunden mit Komma oder Punkt (z.B. 7.5). Ansatz leer = Ansatz des MA bzw. Stundenansatz oben.</p>
+    <div class="tw"><table class="bt wt" style="min-width:880px"><thead><tr><th style="width:140px">Datum</th>${showMa?'<th style="width:180px">Mitarbeiter</th>':''}${tz?'<th>Von</th><th>Bis</th><th>Pause Min</th>':''}<th class="r" style="width:90px">Std.</th><th class="r" style="width:90px">Ansatz</th><th class="r" style="width:100px">CHF</th><th>Bemerkung</th><th></th></tr></thead><tbody>
     ${list.map(w=>`<tr data-id="${w.id}"><td><input type="date" data-wf="date" value="${esc(w.date)}"></td>
       ${showMa?`<td><select data-wf="ma">${mas.map(m=>`<option value="${m.k}" ${maOf(w)===m.k?'selected':''}>${esc(m.n)}</option>`).join('')}<option value="" ${maOf(w)?'':'selected'}>– ohne MA –</option></select></td>`:''}
-      <td><input class="tm" data-wf="von" inputmode="numeric" value="${esc(w.von||'')}" placeholder="${w.h?'':'0730'}"></td><td><input class="tm" data-wf="bis" inputmode="numeric" value="${esc(w.bis||'')}" placeholder="${w.h?'':'1700'}"></td>
-      <td><input class="tm" data-wf="pause" inputmode="numeric" value="${w.pause||''}"></td>
+      ${tz?`<td><input class="tm" data-wf="von" inputmode="numeric" value="${esc(w.von||'')}"></td><td><input class="tm" data-wf="bis" inputmode="numeric" value="${esc(w.bis||'')}"></td>
+      <td><input class="tm" data-wf="pause" inputmode="numeric" value="${w.pause||''}"></td>`:''}
       <td><input class="nm" data-wf="h" inputmode="decimal" value="${workHours(w)?chf(workHours(w)):''}" ${w.von&&w.bis?'readonly title="Aus Von/Bis berechnet"':''}></td>
       <td><input class="nm" data-wf="rate" inputmode="decimal" value="${w.rate!==''&&w.rate!=null?chf(w.rate):''}" placeholder="${chf(workRate(Object.assign({},w,{rate:''})))}"></td>
       <td class="r wb">${chf(workCost(w))}</td><td><input data-wf="note" value="${esc(w.note||'')}" placeholder="Tätigkeit"></td>
       <td><button class="b d sm" data-act="delWork" data-id="${w.id}" title="Löschen">×</button></td></tr>`).join('')}
-    ${list.length?'':`<tr><td colspan="${showMa?10:9}" class="mut c" style="padding:14px">${all.length?'Keine Einsätze für diese Auswahl – unten direkt erfassen.':'Noch keine Arbeitszeiten. Unten direkt erfassen oder über «📥 Excel importieren» übernehmen.'}</td></tr>`}
-    ${wNewRow(r,showMa)}</tbody></table></div>`}
+     ${list.length?'':`<tr><td colspan="${(showMa?7:6)+(tz?3:0)}" class="mut c" style="padding:14px">${all.length?'Keine Einsätze für diese Auswahl – unten direkt erfassen.':'Noch keine Arbeitszeiten. Unten direkt erfassen oder über «📥 Excel importieren» übernehmen.'}</td></tr>`}
+    ${wNewRow(r,showMa,tz)}</tbody></table></div>`}
 /* Excel (.xlsx) direkt im Browser lesen – ohne Zusatzbibliothek, funktioniert offline */
 async function unzip(buf){const u=new Uint8Array(buf),dv=new DataView(buf);let e=u.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw new Error('Keine gültige Excel-Datei');
   const n=dv.getUint16(e+10,true);let o=dv.getUint32(e+16,true);const files={};
