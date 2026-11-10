@@ -273,6 +273,7 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 /* Beleg-Status (nur in der App, nicht im Export) */
 select.bst{background:var(--c,#9ca3af);color:#fff;font-weight:600;font-size:12px;border:1px solid var(--c,#9ca3af);border-radius:7px;padding:5px 4px;width:100%;min-width:150px}
 select.bst option{font-weight:600}
+.inm{display:flex;gap:4px;align-items:center}.inm input{flex:1;min-width:0}.inm label{padding:4px 7px;flex:none}.inm.ocr input{background:#fff7ed}
 .wt tr.wsel td{background:#fff7ed}.wck{width:18px;height:18px;cursor:pointer;accent-color:var(--acc)}.wselbar{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:8px 10px}
 .gwr input[data-stn]{flex:1;min-width:0}
 .gwr input[type=color]{width:38px;height:34px;padding:2px;border:1px solid var(--line);border-radius:7px;background:#fff;flex:none}
@@ -568,7 +569,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='52 (10.11.2026, Änderung auf alle markierten, Esc)';
+const APP_VERSION='53 (10.11.2026, Positionsname aus Bild)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1214,6 +1215,13 @@ async function wSelApply(w,keys){const o=S.work.filter(x=>UI.wsel.has(x.id)&&x!=
   const a=document.activeElement,tr=a&&a.closest&&a.closest('#v-arbeit tr[data-id]'),fk=a&&a.dataset?a.dataset.wf:null,rid=tr?tr.dataset.id:null,sc=window.scrollY;
   renderArbeit();window.scrollTo(0,sc);if(rid&&fk){const n=document.querySelector(`#v-arbeit tr[data-id="${rid}"] [data-wf="${fk}"]`);if(n)n.focus({preventScroll:true})}
   toast(`Auf ${o.length+1} markierte Einsätze übernommen`,2000)}
+/* Positionsname aus einem Bild (Screenshot/Foto des Artikelnamens) per Texterkennung */
+async function itemNameFromImg(bid,ii,blob){const b=belegById(bid),it=b&&(b.items||[])[ii];if(!it||!blob)return;
+  const box=document.querySelector(`input[data-bi="name"][data-b="${bid}"][data-ii="${ii}"]`);const wrap=box&&box.closest('.inm');if(wrap)wrap.classList.add('ocr');if(box){box.value='Text wird erkannt …';box.disabled=true}
+  let txt='';try{txt=await ocrImage(blob)}catch(e){console.warn(e)}
+  txt=txt.split(/\n+/).map(l=>l.replace(/[|_~“”„"»«]+/g,' ').replace(/\s+/g,' ').trim()).filter(l=>l.length>1).join(' ').replace(/\b(CHF|Fr\.?|SFr\.?)\s*\d[\d']*[.,]\d{2}\b/gi,'').replace(/\s+\d[\d']*[.,]\d{2}\s*$/,'').replace(/\s+/g,' ').trim().slice(0,160);
+  if(!txt){toast('Kein Text erkannt – bitte Bild näher/schärfer aufnehmen',3500);renderBelege();return}
+  it.name=txt;await dbPut('belege',b);renderBelege();const n=document.querySelector(`input[data-bi="name"][data-b="${bid}"][data-ii="${ii}"]`);if(n){n.focus();n.select()}toast('Text erkannt – bitte kurz prüfen',2500)}
 async function wAddNew(){const tr=document.querySelector('#v-arbeit tr.wnew:not(.done)');if(!tr)return;const v=k=>{const el=tr.querySelector(`[data-nw="${k}"]`);return el?el.value.trim():''};
   const von=v('von')?parseTime(v('von')):'',bis=v('bis')?parseTime(v('bis')):'';if(von===null||bis===null){toast('Zeit bitte ohne Doppelpunkt eingeben, z.B. 0730 oder 1700',4000);return}
   const w={id:uid(),t:Date.now(),date:v('date')||today(),von:von||'',bis:bis||'',pause:parseInt(v('pause').replace(/\D/g,''),10)||'',h:v('h')?parseAmount(v('h')):'',rate:'',note:v('note'),by:SES?SES.email:'',ma:UI.wm&&UI.wm!=='-'?UI.wm:(tr.querySelector('[data-nw="ma"]')?v('ma'):'')};
@@ -1348,7 +1356,7 @@ const itemPinSel=(b,i,it)=>{const v=it.pin||'',tt=belegTargetTxt(b);return `<sel
 function itemsRow(b,pins){const br=belegBreakdown(b),its=b.items||[],sumI=c2(its.reduce((x,y)=>x+(+y.amount||0),0));
   return `<tr class="bitems"><td></td><td colspan="10"><table class="bit"><thead><tr><th>Nr.</th><th>Datum</th><th>Artikel</th><th>Menge</th><th class="r">CHF</th><th>Gewerk</th><th>gehört zu</th><th class="r">inkl. Rest</th><th></th></tr></thead><tbody>
     ${its.map((it,i)=>{const inf=br.items.find(x=>x.it===it),rs=br.rest&&br.bt&&inf&&inf.m&&inf.m.size?br.rest*(+it.amount)/br.bt:0,mine=rs?c2(+it.amount+rs):'';
-      return `<tr><td class="mut">${itemNo(b,i)}</td><td><input type="date" data-bi="date" data-b="${b.id}" data-ii="${i}" value="${esc(itDate(b,it))}" class="${it.date&&it.date!==b.date?'own':''}" title="${it.date&&it.date!==b.date?'eigenes Datum':'Datum des Belegs'}" style="width:135px"></td><td><input data-bi="name" data-b="${b.id}" data-ii="${i}" value="${esc(it.name)}" class="${b.auto&&b.auto.items?'auto':''}"></td>
+      return `<tr><td class="mut">${itemNo(b,i)}</td><td><input type="date" data-bi="date" data-b="${b.id}" data-ii="${i}" value="${esc(itDate(b,it))}" class="${it.date&&it.date!==b.date?'own':''}" title="${it.date&&it.date!==b.date?'eigenes Datum':'Datum des Belegs'}" style="width:135px"></td><td><div class="inm"><input data-bi="name" data-b="${b.id}" data-ii="${i}" value="${esc(it.name)}" class="${b.auto&&b.auto.items?'auto':''}" title="Name – oder ein Bild des Namens einfügen (Strg+V) bzw. hierher ziehen"><label class="b sm" title="Bild/Foto des Namens – Text wird erkannt">📷<input type="file" accept="image/*" hidden data-up="itemImg" data-b="${b.id}" data-ii="${i}"></label></div></td>
       <td><input data-bi="qty" data-b="${b.id}" data-ii="${i}" value="${esc(it.qty||'')}" style="width:70px"></td><td><input class="r" data-bi="amount" data-b="${b.id}" data-ii="${i}" inputmode="decimal" value="${it.amount===''||it.amount==null?'':chf(it.amount)}" style="width:80px"></td>
       <td><select data-bi="gw" data-b="${b.id}" data-ii="${i}" class="${it.gw?'own':''}" style="max-width:150px"><option value="" ${it.gw?'':'selected'}>${b.gewerk?'wie Beleg → '+esc(b.gewerk):'– wie Beleg –'}</option>${GEWERKE.map(g=>`<option ${it.gw===g?'selected':''}>${g}</option>`).join('')}</select></td>
       <td style="white-space:nowrap">${itemPinSel(b,i,it)} <button class="b sm" data-act="asgStart" data-id="${b.id}" data-ii="${i}" title="Im Grundriss einen oder mehrere Pins antippen">📍</button></td><td class="r mut" style="font-size:11.5px">${mine!==''&&rs?chf(mine):''}</td><td><button class="b d sm" data-act="rmItem" data-id="${b.id}" data-ii="${i}">×</button></td></tr>`}).join('')}
@@ -1787,11 +1795,15 @@ document.addEventListener('focusout',e=>{const t=e.target;if(t&&t.type==='date'&
 document.addEventListener('click',e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.wsel)return;const id=t.dataset.wsel,on=t.checked,ids=workFiltered().map(w=>w.id);
   if(e.shiftKey&&UI.wlast&&ids.includes(UI.wlast)){const a=ids.indexOf(UI.wlast),b=ids.indexOf(id);for(const x of ids.slice(Math.min(a,b),Math.max(a,b)+1))on?UI.wsel.add(x):UI.wsel.delete(x)}else on?UI.wsel.add(id):UI.wsel.delete(id);
   UI.wlast=id;const sc=window.scrollY,tw=document.querySelector('#v-arbeit .tw'),st=tw?tw.scrollTop:0;renderArbeit();window.scrollTo(0,sc);const t2=document.querySelector('#v-arbeit .tw');if(t2)t2.scrollTop=st});
+document.addEventListener('paste',e=>{const t=e.target;if(!t||!t.dataset||t.dataset.bi!=='name')return;const f=[...(e.clipboardData&&e.clipboardData.items||[])].find(x=>x.type.startsWith('image/'));if(!f)return;e.preventDefault();itemNameFromImg(t.dataset.b,+t.dataset.ii,f.getAsFile())});
+document.addEventListener('dragover',e=>{const t=e.target;if(t&&t.dataset&&t.dataset.bi==='name'){e.preventDefault()}});
+document.addEventListener('drop',e=>{const t=e.target;if(!t||!t.dataset||t.dataset.bi!=='name')return;const f=[...(e.dataTransfer&&e.dataTransfer.files||[])].find(x=>x.type.startsWith('image/'));if(!f)return;e.preventDefault();e.stopPropagation();itemNameFromImg(t.dataset.b,+t.dataset.ii,f)},true);
 document.addEventListener('keydown',e=>{const t=e.target;if(e.key==='Enter'&&t&&t.dataset&&t.dataset.nw!==undefined){e.preventDefault();if(t.dataset.nw!=='ma'&&t.dataset.nw!=='date')WNEW[t.dataset.nw]=t.value;wAddNew()}});
 document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(t.type==='date'&&(d.bi||d.bf||d.wf)){if(!t.value&&document.activeElement===t){t.dataset.pendEmpty='1';return}if(!dateOk(t.value))return}
   if(d.surf){const p=pinById(UI.pin);if(!p)return;let v=t.value;if(v==='__new'){v=await newSurf();if(!v){renderPinPanel();return}}touch('pins',p.id);if(v)p.surf=v;else delete p.surf;await dbPut('pins',p);await relinkSurf();renderPinPanel();renderStage();
     const n=S.belege.reduce((x,b)=>x+(b.items||[]).filter(it=>it.pin==='o'&&it.surf===v).length,0);toast(v?`Oberfläche «${v}»${n?` – ${n} Beleg-Position(en) werden jetzt auch auf diesen Pin verteilt`:''}`:'Oberfläche entfernt',3000);return}
+  if(d.up==='itemImg'){const fl=t.files[0];t.value='';if(fl)await itemNameFromImg(d.b,+d.ii,fl);return}
   if(d.up){const files=[...t.files];t.value='';if(files.length)await UP[d.up](files);return}
   if(d.bfl!==undefined&&t.tagName==='SELECT'){UI.bfl[d.bfl]=t.value;renderBelege();return}
   if(d.ch&&CH[d.ch]){CH[d.ch](t.value,t);return}
