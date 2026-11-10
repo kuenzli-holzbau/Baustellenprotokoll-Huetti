@@ -273,6 +273,7 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 /* Beleg-Status (nur in der App, nicht im Export) */
 select.bst{background:var(--c,#9ca3af);color:#fff;font-weight:600;font-size:12px;border:1px solid var(--c,#9ca3af);border-radius:7px;padding:5px 4px;width:100%;min-width:150px}
 select.bst option{font-weight:600}
+.wt tr.wsel td{background:#fff7ed}.wck{width:18px;height:18px;cursor:pointer;accent-color:var(--acc)}.wselbar{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:8px 10px}
 .gwr input[data-stn]{flex:1;min-width:0}
 .gwr input[type=color]{width:38px;height:34px;padding:2px;border:1px solid var(--line);border-radius:7px;background:#fff;flex:none}
 .gwr input[data-gwn]{flex:1;min-width:0}
@@ -567,7 +568,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='50 (09.11.2026, Mitarbeitername im Rapport)';
+const APP_VERSION='51 (10.11.2026, Zeilen markieren, alle Quartale)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -619,7 +620,7 @@ const dbClear=s=>tx(s,'readwrite',st=>st.clear());
 const S={project:{id:'project',name:APP.title,address:'',author:'',period:''},floors:[],buildings:[],articles:[],pins:[],belege:[],blobs:[],work:[]};
 const ZOOM0=.5;
 let SHOWLBL=false;try{SHOWLBL=localStorage.getItem(APP.id+'_lbl')==='1'}catch(_){}
-const UI={bs:{k:'nr',d:1},bfl:{st:'',nr:'',date:'',sup:'',desc:'',cat:'',gw:'',amt:'',pins:''},tab:'plan',floor:null,pin:null,add:false,draw:null,newArt:null,gf:'',pf:'',pfl:'',gwOpen:new Set(),fg:'',zoom:ZOOM0,fy:'',fc:'',q:'',hl:null,opts:{plans:true,entries:true,mats:true,work:true,list:true,att:true,gw:''}};
+const UI={wsel:new Set(),wlast:null,bs:{k:'nr',d:1},bfl:{st:'',nr:'',date:'',sup:'',desc:'',cat:'',gw:'',amt:'',pins:''},tab:'plan',floor:null,pin:null,add:false,draw:null,newArt:null,gf:'',pf:'',pfl:'',gwOpen:new Set(),fg:'',zoom:ZOOM0,fy:'',fc:'',q:'',hl:null,opts:{plans:true,entries:true,mats:true,work:true,list:true,att:true,gw:''}};
 const blobMap=new Map(), urls=new Map();
 const floorById=id=>S.floors.find(f=>f.id===id);
 const pinById=id=>S.pins.find(p=>p.id===id);
@@ -1188,17 +1189,22 @@ function workRepHtml(title,sub,ws,period){const mk=[...new Set(ws.map(maOf))],mn
     ${multi?`<table class="qrt" style="width:auto;margin-top:4mm"><tbody>${[...new Set(ws.map(maOf))].map(k=>{const l=ws.filter(w=>maOf(w)===k);return `<tr><td>${esc(maName(k))}</td><td class="r">${chf(sumH(l))} h</td><td class="r">CHF ${chf(sumC(l))}</td></tr>`}).join('')}</tbody></table>`:''}
     <div class="qrs"><p>Die aufgeführten Arbeitsstunden${period?' für den Zeitraum '+period:''} werden bestätigt.</p>
       <div class="sg"><div><div class="ln"></div><small>Ort, Datum</small></div><div><div class="ln"></div><small>Unterschrift Bauherr: ${esc(bauherr())}</small></div></div></div></section>`}
-function qReportHtml(q){const [a,b]=qRange(q);return workRepHtml('Quartalsrapport Arbeitszeit'+(UI.wm&&UI.wm!=='-'?' – '+maName(UI.wm):''),`${q.slice(-1)}. Quartal ${q.slice(0,4)} · ${fmtDate(a)} – ${fmtDate(b)}`,workOfMa().filter(w=>quarterOf(w.date)===q),`${fmtDate(a)} – ${fmtDate(b)}`)}
+function qReportHtml(q,ws){const [a,b]=qRange(q);ws=ws||workOfMa();return workRepHtml('Quartalsrapport Arbeitszeit',`${q.slice(-1)}. Quartal ${q.slice(0,4)} · ${fmtDate(a)} – ${fmtDate(b)}`,ws.filter(w=>quarterOf(w.date)===q),`${fmtDate(a)} – ${fmtDate(b)}`)}
+/* Alle Quartalsrapporte auf einmal: je Mitarbeiter und Quartal eine Seite (in «Alle» für jeden MA, sonst für den gewählten) */
+async function doAllQ(){const all=workSorted(),keys=UI.wm?[UI.wm==='-'?'':UI.wm]:[...maList().map(m=>m.k),''];const pages=[];
+  for(const k of keys){const ws=all.filter(w=>maOf(w)===k);for(const q of [...new Set(ws.map(w=>quarterOf(w.date)).filter(Boolean))].sort())pages.push(qReportHtml(q,ws))}
+  if(!pages.length)return toast('Keine Arbeitszeiten vorhanden',2500);toast(`${pages.length} Quartalsrapport${pages.length>1?'e':''} – je eine Seite`,3000);
+  printWork(pages.join(''),`Quartalsrapporte ${UI.wm&&UI.wm!=='-'?maName(UI.wm)+' ':''}– ${S.project.name||APP.title}`)}
 async function printWork(html,title){const pr=$('#print');pr.innerHTML=html;const old=document.title;document.title=title;setTimeout(()=>{window.print();document.title=old},150)}
-async function doQReport(){const qs=UI.wq==='all'?workQuarters():[UI.wq];if(!qs[0])return;
-  printWork(qs.map(qReportHtml).join(''),`Quartalsrapport ${UI.wq==='all'?'alle Quartale':qs[0].replace('-',' ')}${UI.wm&&UI.wm!=='-'?' '+maName(UI.wm):''} – ${S.project.name||APP.title}`)}
+async function doQReport(){if(UI.wq==='all')return doAllQ();const qs=[UI.wq];if(!qs[0])return;
+  printWork(qs.map(q=>qReportHtml(q)).join(''),`Quartalsrapport ${UI.wq==='all'?'alle Quartale':qs[0].replace('-',' ')}${UI.wm&&UI.wm!=='-'?' '+maName(UI.wm):''} – ${S.project.name||APP.title}`)}
 async function doWorkList(){const ws=workFiltered();if(!ws.length)return toast('Keine Einsätze für diese Auswahl',2500);const ds=ws.map(w=>w.date).filter(Boolean).sort(),per=ds.length?`${fmtDate(ds[0])} – ${fmtDate(ds[ds.length-1])}`:'';
   const who=UI.wm?(UI.wm==='-'?'ohne MA':maName(UI.wm)):'alle Mitarbeiter';
   printWork(workRepHtml('Arbeitszeitliste – '+who,(UI.wy?'Jahr '+UI.wy+' · ':'')+per,ws,per),`Arbeitszeitliste ${who}${UI.wy?' '+UI.wy:''} – ${S.project.name||APP.title}`)}
 /* neue Zeile unten in der Tabelle: direkt weitere Zeiten erfassen */
 const WNEW={date:'',von:'',bis:'',pause:'',h:'',note:'',ma:''};
 function wNewRow(r,showMa,tz){const d=WNEW.date||(()=>{const l=workFiltered();return l.length?l[l.length-1].date:today()})();
-  return `<tr class="wnew"><td><input type="date" data-nw="date" value="${esc(d)}"></td>${showMa?`<td><select data-nw="ma">${(()=>{const dm=maById(WNEW.ma)?WNEW.ma:(maList()[0]||{}).k||'';return maList().map(m=>`<option value="${m.k}" ${dm===m.k?'selected':''}>${esc(m.n)}</option>`).join('')+`<option value="" ${dm?'':'selected'}>– ohne MA –</option>`})()}</select></td>`:''}
+  return `<tr class="wnew"><td></td><td><input type="date" data-nw="date" value="${esc(d)}"></td>${showMa?`<td><select data-nw="ma">${(()=>{const dm=maById(WNEW.ma)?WNEW.ma:(maList()[0]||{}).k||'';return maList().map(m=>`<option value="${m.k}" ${dm===m.k?'selected':''}>${esc(m.n)}</option>`).join('')+`<option value="" ${dm?'':'selected'}>– ohne MA –</option>`})()}</select></td>`:''}
     ${tz?`<td><input class="tm" data-nw="von" inputmode="numeric" value="${esc(WNEW.von)}" placeholder="0730"></td><td><input class="tm" data-nw="bis" inputmode="numeric" value="${esc(WNEW.bis)}" placeholder="1700"></td>
     <td><input class="tm" data-nw="pause" inputmode="numeric" value="${esc(WNEW.pause)}"></td>`:''}<td><input class="nm" data-nw="h" inputmode="decimal" value="${esc(WNEW.h)}" placeholder="Std."></td>
     <td class="mut r" style="font-size:12px">${chf(UI.wm&&UI.wm!=='-'&&maById(UI.wm)&&maById(UI.wm).rate!==''&&maById(UI.wm).rate!=null?maById(UI.wm).rate:r)}</td><td></td><td><input data-nw="note" value="${esc(WNEW.note)}" placeholder="Tätigkeit – Enter = hinzufügen"></td>
@@ -1220,14 +1226,18 @@ function renderArbeit(){
     <div class="bbar"><label class="b">📥 Excel importieren<input type="file" accept=".xlsx,.xlsm,.csv" hidden data-up="workXls"></label>
     <span class="wrate">Stundenansatz CHF <input data-pf="rate" inputmode="decimal" value="${S.project.rate!=null&&S.project.rate!==''?chf(r):''}" placeholder="0.00"></span>
     <select data-ch="wy"><option value="">Alle Jahre</option>${years.map(y=>`<option ${UI.wy===y?'selected':''}>${y}</option>`).join('')}</select>
-    <select data-ch="wq" title="Quartal für den Rapport"><option value="">Quartal wählen …</option>${workQuarters().map(q=>`<option value="${q}" ${UI.wq===q?'selected':''}>${qLabel(q)}</option>`).join('')}${workQuarters().length>1?`<option value="all" ${UI.wq==='all'?'selected':''}>Alle Quartale (je eine Seite)</option>`:''}</select>
+    <select data-ch="wq" title="Quartal für den Rapport"><option value="">Quartal wählen …</option>${workQuarters().map(q=>`<option value="${q}" ${UI.wq===q?'selected':''}>${qLabel(q)}</option>`).join('')}</select>
     <button class="b" data-act="qRep" ${UI.wq?'':'disabled'} title="Quartalsrapport zum Unterschreiben drucken / als PDF speichern">🖨 Quartalsrapport</button>
+    <button class="b" data-act="qAll" title="Alle Quartalsrapporte in einem PDF – pro Mitarbeiter und Quartal eine Seite">🖨 Alle Quartale</button>
     <button class="b" data-act="wList" title="Liste der angezeigten Einsätze drucken / als PDF speichern">🖨 Liste</button>
     <span class="wrate">Bauherr <input data-pf="bauherr" value="${esc(bauherr())}" style="width:160px;text-align:left"></span>
     <span class="sp"></span><span class="sum" id="wsum">${workSumText()}</span></div>
     <p class="mut" style="font-size:12px;margin:0 0 10px">Neue Tage unten in der leeren Zeile erfassen: Datum, Stunden, Tätigkeit – Enter fügt sie hinzu. Stunden mit Komma oder Punkt (z.B. 7.5). Ansatz leer = Ansatz des MA bzw. Stundenansatz oben.</p>
-    <div class="tw"><table class="bt wt" style="min-width:880px"><thead><tr><th style="width:140px">Datum</th>${showMa?'<th style="width:180px">Mitarbeiter</th>':''}${tz?'<th>Von</th><th>Bis</th><th>Pause Min</th>':''}<th class="r" style="width:90px">Std.</th><th class="r" style="width:90px">Ansatz</th><th class="r" style="width:100px">CHF</th><th>Bemerkung</th><th></th></tr></thead><tbody>
-    ${list.map(w=>`<tr data-id="${w.id}"><td><input type="date" data-wf="date" value="${esc(w.date)}"></td>
+    ${(()=>{const sel=S.work.filter(w=>UI.wsel.has(w.id));if(!sel.length)return '';return `<div class="bbar wselbar"><b>☑ ${sel.length} markiert · ${hfmt(sumH(sel))} · CHF ${chf(sumC(sel))}</b>
+      ${mas.length?`<select data-ch="wSelMa"><option value="">→ Mitarbeiter zuordnen …</option>${mas.map(m=>`<option value="${m.k}">${esc(m.n)}</option>`).join('')}<option value="-">– ohne MA –</option></select>`:''}
+      <button class="b" data-act="wSelPrint">🖨 Liste der markierten</button><button class="b d" data-act="wSelDel">🗑 Löschen</button><span class="sp"></span><button class="b sm" data-act="wSelNone">Auswahl aufheben</button><span class="mut" style="font-size:12px">Tipp: Shift + Klick markiert alle dazwischen</span></div>`})()}
+    <div class="tw"><table class="bt wt" style="min-width:880px"><thead><tr><th style="width:34px"><input type="checkbox" class="wck" data-act="wSelAll" title="Alle angezeigten markieren" ${list.length&&list.every(w=>UI.wsel.has(w.id))?'checked':''}></th><th style="width:140px">Datum</th>${showMa?'<th style="width:180px">Mitarbeiter</th>':''}${tz?'<th>Von</th><th>Bis</th><th>Pause Min</th>':''}<th class="r" style="width:90px">Std.</th><th class="r" style="width:90px">Ansatz</th><th class="r" style="width:100px">CHF</th><th>Bemerkung</th><th></th></tr></thead><tbody>
+    ${list.map(w=>`<tr data-id="${w.id}" class="${UI.wsel.has(w.id)?'wsel':''}"><td><input type="checkbox" class="wck" data-wsel="${w.id}" ${UI.wsel.has(w.id)?'checked':''}></td><td><input type="date" data-wf="date" value="${esc(w.date)}"></td>
       ${showMa?`<td><select data-wf="ma">${mas.map(m=>`<option value="${m.k}" ${maOf(w)===m.k?'selected':''}>${esc(m.n)}</option>`).join('')}<option value="" ${maOf(w)?'':'selected'}>– ohne MA –</option></select></td>`:''}
       ${tz?`<td><input class="tm" data-wf="von" inputmode="numeric" value="${esc(w.von||'')}"></td><td><input class="tm" data-wf="bis" inputmode="numeric" value="${esc(w.bis||'')}"></td>
       <td><input class="tm" data-wf="pause" inputmode="numeric" value="${w.pause||''}"></td>`:''}
@@ -1235,7 +1245,7 @@ function renderArbeit(){
       <td><input class="nm" data-wf="rate" inputmode="decimal" value="${w.rate!==''&&w.rate!=null?chf(w.rate):''}" placeholder="${chf(workRate(Object.assign({},w,{rate:''})))}"></td>
       <td class="r wb">${chf(workCost(w))}</td><td><input data-wf="note" value="${esc(w.note||'')}" placeholder="Tätigkeit"></td>
       <td><button class="b d sm" data-act="delWork" data-id="${w.id}" title="Löschen">×</button></td></tr>`).join('')}
-     ${list.length?'':`<tr><td colspan="${(showMa?7:6)+(tz?3:0)}" class="mut c" style="padding:14px">${all.length?'Keine Einsätze für diese Auswahl – unten direkt erfassen.':'Noch keine Arbeitszeiten. Unten direkt erfassen oder über «📥 Excel importieren» übernehmen.'}</td></tr>`}
+     ${list.length?'':`<tr><td colspan="${(showMa?8:7)+(tz?3:0)}" class="mut c" style="padding:14px">${all.length?'Keine Einsätze für diese Auswahl – unten direkt erfassen.':'Noch keine Arbeitszeiten. Unten direkt erfassen oder über «📥 Excel importieren» übernehmen.'}</td></tr>`}
     ${wNewRow(r,showMa,tz)}</tbody></table></div>`}
 /* Excel (.xlsx) direkt im Browser lesen – ohne Zusatzbibliothek, funktioniert offline */
 async function unzip(buf){const u=new Uint8Array(buf),dv=new DataView(buf);let e=u.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw new Error('Keine gültige Excel-Datei');
@@ -1595,6 +1605,12 @@ const ACT={
   surfView:()=>{UI.sv=!UI.sv;renderPlan()},
   qRep:()=>doQReport(),
   wList:()=>doWorkList(),
+  qAll:()=>doAllQ(),
+  wSelAll:()=>{const ids=workFiltered().map(w=>w.id),all=ids.every(id=>UI.wsel.has(id));for(const id of ids)all?UI.wsel.delete(id):UI.wsel.add(id);UI.wlast=null;renderArbeit()},
+  wSelNone:()=>{UI.wsel.clear();UI.wlast=null;renderArbeit()},
+  wSelDel:async()=>{const l=S.work.filter(w=>UI.wsel.has(w.id));if(!l.length||!confirm(`${l.length} markierte Einsätze löschen?`))return;for(const w of l){S.work.splice(S.work.indexOf(w),1);await dbDel('work',w.id)}UI.wsel.clear();renderArbeit();toast(`${l.length} Einsätze gelöscht`,2500)},
+  wSelPrint:()=>{const ws=workSorted().filter(w=>UI.wsel.has(w.id));if(!ws.length)return;const ds=ws.map(w=>w.date).filter(Boolean).sort(),per=ds.length?`${fmtDate(ds[0])} – ${fmtDate(ds[ds.length-1])}`:'';
+    printWork(workRepHtml('Arbeitszeitliste (Auswahl)',per,ws,per),`Arbeitszeitliste Auswahl – ${S.project.name||APP.title}`)},
   wAdd:()=>wAddNew(),
   wmSet:id=>{UI.wm=id||'';UI.wq='';WNEW.ma=UI.wm&&UI.wm!=='-'?UI.wm:WNEW.ma;renderArbeit()},
   maAdd:async()=>{const n=(prompt('Name des Mitarbeiters:','')||'').trim();if(!n)return;if(maList().some(m=>m.n.toLowerCase()===n.toLowerCase())){toast('Diesen Mitarbeiter gibt es schon',2500);return}
@@ -1743,6 +1759,7 @@ const ACT={
 const CH={
   gf:v=>{UI.gf=v;renderStage()},
   wq:v=>{UI.wq=v;renderArbeit()},
+  wSelMa:async v=>{if(!v)return;const l=S.work.filter(w=>UI.wsel.has(w.id));for(const w of l){w.ma=v==='-'?'':v;await dbPut('work',w)}toast(`${l.length} Einsätze → ${v==='-'?'ohne MA':maName(v)}`,2500);renderArbeit()},
   mvFloor:v=>{UI.floor=v;UI.pin=null;UI.zoom=ZOOM0;renderPlan()},
   pfl:v=>{UI.pfl=v;renderFotos()},
   pgw:v=>{UI.opts.gw=v},
@@ -1762,6 +1779,9 @@ document.addEventListener('click',e=>{const a=e.target.closest('[data-act]');if(
   if(a.tagName==='A'||a.tagName==='BUTTON')e.preventDefault();ACT[a.dataset.act](a.dataset.id,a,e)});
 /* Datumsfeld wird beim Tippen kurz leer – leer erst übernehmen, wenn das Feld verlassen wird */
 document.addEventListener('focusout',e=>{const t=e.target;if(t&&t.type==='date'&&t.dataset.pendEmpty){delete t.dataset.pendEmpty;if(!t.value)setTimeout(()=>t.dispatchEvent(new Event('change',{bubbles:true})),0)}});
+document.addEventListener('click',e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.wsel)return;const id=t.dataset.wsel,on=t.checked,ids=workFiltered().map(w=>w.id);
+  if(e.shiftKey&&UI.wlast&&ids.includes(UI.wlast)){const a=ids.indexOf(UI.wlast),b=ids.indexOf(id);for(const x of ids.slice(Math.min(a,b),Math.max(a,b)+1))on?UI.wsel.add(x):UI.wsel.delete(x)}else on?UI.wsel.add(id):UI.wsel.delete(id);
+  UI.wlast=id;const sc=window.scrollY,tw=document.querySelector('#v-arbeit .tw'),st=tw?tw.scrollTop:0;renderArbeit();window.scrollTo(0,sc);const t2=document.querySelector('#v-arbeit .tw');if(t2)t2.scrollTop=st});
 document.addEventListener('keydown',e=>{const t=e.target;if(e.key==='Enter'&&t&&t.dataset&&t.dataset.nw!==undefined){e.preventDefault();if(t.dataset.nw!=='ma'&&t.dataset.nw!=='date')WNEW[t.dataset.nw]=t.value;wAddNew()}});
 document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(t.type==='date'&&(d.bi||d.bf)){if(!t.value&&document.activeElement===t){t.dataset.pendEmpty='1';return}if(!dateOk(t.value))return}
