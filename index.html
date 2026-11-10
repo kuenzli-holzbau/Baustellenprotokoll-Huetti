@@ -569,7 +569,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='54 (10.11.2026, Strg+V Bild für Positionen)';
+const APP_VERSION='55 (10.11.2026, Zoll-Angaben in der Texterkennung)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -955,15 +955,21 @@ function tesseractLib(){if(!tessP)tessP=new Promise((res,rej)=>{const s=document
   s.onload=()=>window.Tesseract?res(window.Tesseract):rej(new Error('Texterkennung nicht verfügbar'));s.onerror=()=>{tessP=null;s.remove();rej(new Error('Texterkennung braucht beim ersten Mal eine Internetverbindung.'))};document.head.appendChild(s)});return tessP}
 /* Für die Texterkennung: auf ~2000 px skalieren, Graustufen, Kontrast strecken und schwarz/weiss (Otsu) – hilft bei Thermo-Kassenzetteln */
 async function ocrPrep(blob){try{const bm=await createImageBitmap(blob);const sc=Math.min(3,Math.max(1,2000/Math.max(bm.width,1))),w=Math.round(bm.width*sc),h=Math.round(bm.height*sc);
-  const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.drawImage(bm,0,0,w,h);const d=x.getImageData(0,0,w,h),a=d.data,hist=new Array(256).fill(0),g=new Uint8Array(w*h);
+  const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(bm,0,0,w,h);const d=x.getImageData(0,0,w,h),a=d.data,hist=new Array(256).fill(0),g=new Uint8Array(w*h);
   for(let i=0,j=0;i<a.length;i+=4,j++){const v=(a[i]*299+a[i+1]*587+a[i+2]*114)/1000|0;g[j]=v;hist[v]++}
   let lo=0,hi=255,cnt=0;const n=w*h;for(;lo<255&&(cnt+=hist[lo])<n*.01;lo++);cnt=0;for(;hi>0&&(cnt+=hist[hi])<n*.01;hi--);const span=Math.max(1,hi-lo);
   const h2=new Array(256).fill(0);for(let j=0;j<n;j++){g[j]=Math.max(0,Math.min(255,(g[j]-lo)*255/span));h2[g[j]]++}
   let sum=0;for(let t=0;t<256;t++)sum+=t*h2[t];let sB=0,wB=0,best=0,thr=128;for(let t=0;t<256;t++){wB+=h2[t];if(!wB)continue;const wF=n-wB;if(!wF)break;sB+=t*h2[t];const mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;thr=t}}
   for(let i=0,j=0;i<a.length;i+=4,j++){const v=g[j]>thr?255:0;a[i]=a[i+1]=a[i+2]=v}x.putImageData(d,0,0);
   return await new Promise(r=>c.toBlob(r,'image/png'))}catch(e){console.warn(e);return blob}}
+/* Zoll-Brüche: Tesseract liest ½ als «%», ¼ als «Ya»/«Y4», ¾ als «%a» – vor einem Zollzeichen korrigieren */
+function fixZoll(t){const Q='(?=\\s*["“”″\'’])';return String(t||'')
+  .replace(/[“”″]/g,'"')
+  .replace(new RegExp('(\\d?)[ \\t]?%a'+Q,'g'),'$1¾').replace(new RegExp('(\\d?)[ \\t]?3/?4'+Q,'g'),(m,a)=>m.includes('/')?m:a+'¾')
+  .replace(new RegExp('(\\d?)[ \\t]?Y[a4]'+Q,'g'),'$1¼').replace(new RegExp('(\\d?)[ \\t]?(?:%|Yo|Y2|Ya)'+Q,'g'),'$1½')
+  .replace(/(\d)[ \t]+(?=[½¼¾])/g,'$1').replace(/([½¼¾])\s*'{2}/g,'$1"')}
 async function ocrImage(blob){const T=await tesseractLib();if(!ocrWorker){ocrWorker=await T.createWorker('deu');try{await ocrWorker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'})}catch(_){}}
-  const r=await ocrWorker.recognize(await ocrPrep(blob));return (r&&r.data&&r.data.text)||''}
+  const r=await ocrWorker.recognize(await ocrPrep(blob));return fixZoll((r&&r.data&&r.data.text)||'')}
 async function pdfText(blob){const doc=await openPdf(blob);let out=[];
   for(let i=1;i<=Math.min(doc.numPages,60);i++){const pg=await doc.getPage(i);const c=await pg.getTextContent();const rows=[];
     for(const it of c.items){if(!it.str||!it.str.trim())continue;const y=it.transform[5],x=it.transform[4];let r=rows.find(r=>Math.abs(r.y-y)<3);if(!r){r={y,items:[]};rows.push(r)}r.items.push({x,s:it.str})}
@@ -1219,7 +1225,7 @@ async function wSelApply(w,keys){const o=S.work.filter(x=>UI.wsel.has(x.id)&&x!=
 async function itemNameFromImg(bid,ii,blob){const b=belegById(bid),it=b&&(b.items||[])[ii];if(!it||!blob)return;
   const box=document.querySelector(`input[data-bi="name"][data-b="${bid}"][data-ii="${ii}"]`);const wrap=box&&box.closest('.inm');if(wrap)wrap.classList.add('ocr');if(box){box.value='Text wird erkannt …';box.disabled=true}
   let txt='';try{txt=await ocrImage(blob)}catch(e){console.warn(e)}
-  txt=txt.split(/\n+/).map(l=>l.replace(/[|_~“”„"»«]+/g,' ').replace(/\s+/g,' ').trim()).filter(l=>l.length>1).join(' ').replace(/\b(CHF|Fr\.?|SFr\.?)\s*\d[\d']*[.,]\d{2}\b/gi,'').replace(/\s+\d[\d']*[.,]\d{2}\s*$/,'').replace(/\s+/g,' ').trim().slice(0,160);
+  txt=txt.split(/\n+/).map(l=>l.replace(/[|_~„»«]+/g,' ').replace(/\s+/g,' ').trim()).filter(l=>l.length>1).join(' ').replace(/\b(CHF|Fr\.?|SFr\.?)\s*\d[\d']*[.,]\d{2}\b/gi,'').replace(/\s+\d[\d']*[.,]\d{2}\s*$/,'').replace(/\s+/g,' ').trim().slice(0,160);
   if(!txt){toast('Kein Text erkannt – bitte Bild näher/schärfer aufnehmen',3500);renderBelege();return}
   it.name=txt;await dbPut('belege',b);renderBelege();const n=document.querySelector(`input[data-bi="name"][data-b="${bid}"][data-ii="${ii}"]`);if(n){n.focus();n.select()}toast('Text erkannt – bitte kurz prüfen',2500)}
 async function wAddNew(){const tr=document.querySelector('#v-arbeit tr.wnew:not(.done)');if(!tr)return;const v=k=>{const el=tr.querySelector(`[data-nw="${k}"]`);return el?el.value.trim():''};
