@@ -569,7 +569,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='53 (10.11.2026, Positionsname aus Bild)';
+const APP_VERSION='54 (10.11.2026, Strg+V Bild für Positionen)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1795,7 +1795,18 @@ document.addEventListener('focusout',e=>{const t=e.target;if(t&&t.type==='date'&
 document.addEventListener('click',e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.wsel)return;const id=t.dataset.wsel,on=t.checked,ids=workFiltered().map(w=>w.id);
   if(e.shiftKey&&UI.wlast&&ids.includes(UI.wlast)){const a=ids.indexOf(UI.wlast),b=ids.indexOf(id);for(const x of ids.slice(Math.min(a,b),Math.max(a,b)+1))on?UI.wsel.add(x):UI.wsel.delete(x)}else on?UI.wsel.add(id):UI.wsel.delete(id);
   UI.wlast=id;const sc=window.scrollY,tw=document.querySelector('#v-arbeit .tw'),st=tw?tw.scrollTop:0;renderArbeit();window.scrollTo(0,sc);const t2=document.querySelector('#v-arbeit .tw');if(t2)t2.scrollTop=st});
-document.addEventListener('paste',e=>{const t=e.target;if(!t||!t.dataset||t.dataset.bi!=='name')return;const f=[...(e.clipboardData&&e.clipboardData.items||[])].find(x=>x.type.startsWith('image/'));if(!f)return;e.preventDefault();itemNameFromImg(t.dataset.b,+t.dataset.ii,f.getAsFile())});
+/* Strg+V mit Bild in der Beleg-Liste: Namensfeld mit Fokus → diese Position; sonst zuletzt bearbeitete Position (leerer Name) bzw. neue Position im geöffneten Beleg */
+document.addEventListener('focusin',e=>{const t=e.target;if(t&&t.dataset&&t.dataset.bi&&t.dataset.b)UI.lastItem={b:t.dataset.b,ii:+t.dataset.ii}});
+document.addEventListener('paste',async e=>{if(UI.tab!=='belege')return;const cd=e.clipboardData;if(!cd)return;
+  const f=[...(cd.files||[])].find(x=>x.type.startsWith('image/'))||(()=>{const it=[...(cd.items||[])].find(x=>x.kind==='file'&&x.type.startsWith('image/'));return it?it.getAsFile():null})();if(!f)return;
+  const t=e.target;let bid,ii;
+  if(t&&t.dataset&&t.dataset.bi&&t.dataset.b){bid=t.dataset.b;ii=+t.dataset.ii;if(t.dataset.bi!=='name'){const it=(belegById(bid).items||[])[ii];if(it&&it.name){bid=null}}}
+  if(!bid&&t&&/INPUT|TEXTAREA/.test(t.tagName)&&!(t.dataset&&t.dataset.bi))return;   // anderes Textfeld: normal einfügen
+  if(!bid){const open=[...(UI.bOpen||[])].map(belegById).filter(Boolean);const lb=UI.lastItem&&belegById(UI.lastItem.b);
+    const b=lb&&UI.bOpen&&UI.bOpen.has(lb.id)?lb:(open.length===1?open[0]:null);
+    if(!b){toast('Bild einfügen: zuerst die Positionen eines Belegs öffnen (▸) oder ins Namensfeld klicken',4000);return}
+    b.items=b.items||[];let i=b.items.findIndex(x=>!(x.name||'').trim());if(i<0){b.items.push({id:uid(),name:'',qty:'',amount:'',pin:''});i=b.items.length-1;await dbPut('belege',b);renderBelege()}bid=b.id;ii=i}
+  e.preventDefault();itemNameFromImg(bid,ii,f)});
 document.addEventListener('dragover',e=>{const t=e.target;if(t&&t.dataset&&t.dataset.bi==='name'){e.preventDefault()}});
 document.addEventListener('drop',e=>{const t=e.target;if(!t||!t.dataset||t.dataset.bi!=='name')return;const f=[...(e.dataTransfer&&e.dataTransfer.files||[])].find(x=>x.type.startsWith('image/'));if(!f)return;e.preventDefault();e.stopPropagation();itemNameFromImg(t.dataset.b,+t.dataset.ii,f)},true);
 document.addEventListener('keydown',e=>{const t=e.target;if(e.key==='Enter'&&t&&t.dataset&&t.dataset.nw!==undefined){e.preventDefault();if(t.dataset.nw!=='ma'&&t.dataset.nw!=='date')WNEW[t.dataset.nw]=t.value;wAddNew()}});
