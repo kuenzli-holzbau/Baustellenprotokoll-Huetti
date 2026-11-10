@@ -568,7 +568,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='51 (10.11.2026, Zeilen markieren, alle Quartale)';
+const APP_VERSION='52 (10.11.2026, Änderung auf alle markierten, Esc)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1209,6 +1209,11 @@ function wNewRow(r,showMa,tz){const d=WNEW.date||(()=>{const l=workFiltered();re
     <td><input class="tm" data-nw="pause" inputmode="numeric" value="${esc(WNEW.pause)}"></td>`:''}<td><input class="nm" data-nw="h" inputmode="decimal" value="${esc(WNEW.h)}" placeholder="Std."></td>
     <td class="mut r" style="font-size:12px">${chf(UI.wm&&UI.wm!=='-'&&maById(UI.wm)&&maById(UI.wm).rate!==''&&maById(UI.wm).rate!=null?maById(UI.wm).rate:r)}</td><td></td><td><input data-nw="note" value="${esc(WNEW.note)}" placeholder="Tätigkeit – Enter = hinzufügen"></td>
     <td><button class="b p sm" data-act="wAdd" title="Zeile hinzufügen (Enter)">＋</button></td></tr>`}
+/* Änderung in einer markierten Zeile auf alle markierten übertragen */
+async function wSelApply(w,keys){const o=S.work.filter(x=>UI.wsel.has(x.id)&&x!==w);for(const x of o){for(const k of keys)x[k]=w[k];await dbPut('work',x)}
+  const a=document.activeElement,tr=a&&a.closest&&a.closest('#v-arbeit tr[data-id]'),fk=a&&a.dataset?a.dataset.wf:null,rid=tr?tr.dataset.id:null,sc=window.scrollY;
+  renderArbeit();window.scrollTo(0,sc);if(rid&&fk){const n=document.querySelector(`#v-arbeit tr[data-id="${rid}"] [data-wf="${fk}"]`);if(n)n.focus({preventScroll:true})}
+  toast(`Auf ${o.length+1} markierte Einsätze übernommen`,2000)}
 async function wAddNew(){const tr=document.querySelector('#v-arbeit tr.wnew:not(.done)');if(!tr)return;const v=k=>{const el=tr.querySelector(`[data-nw="${k}"]`);return el?el.value.trim():''};
   const von=v('von')?parseTime(v('von')):'',bis=v('bis')?parseTime(v('bis')):'';if(von===null||bis===null){toast('Zeit bitte ohne Doppelpunkt eingeben, z.B. 0730 oder 1700',4000);return}
   const w={id:uid(),t:Date.now(),date:v('date')||today(),von:von||'',bis:bis||'',pause:parseInt(v('pause').replace(/\D/g,''),10)||'',h:v('h')?parseAmount(v('h')):'',rate:'',note:v('note'),by:SES?SES.email:'',ma:UI.wm&&UI.wm!=='-'?UI.wm:(tr.querySelector('[data-nw="ma"]')?v('ma'):'')};
@@ -1235,7 +1240,7 @@ function renderArbeit(){
     <p class="mut" style="font-size:12px;margin:0 0 10px">Neue Tage unten in der leeren Zeile erfassen: Datum, Stunden, Tätigkeit – Enter fügt sie hinzu. Stunden mit Komma oder Punkt (z.B. 7.5). Ansatz leer = Ansatz des MA bzw. Stundenansatz oben.</p>
     ${(()=>{const sel=S.work.filter(w=>UI.wsel.has(w.id));if(!sel.length)return '';return `<div class="bbar wselbar"><b>☑ ${sel.length} markiert · ${hfmt(sumH(sel))} · CHF ${chf(sumC(sel))}</b>
       ${mas.length?`<select data-ch="wSelMa"><option value="">→ Mitarbeiter zuordnen …</option>${mas.map(m=>`<option value="${m.k}">${esc(m.n)}</option>`).join('')}<option value="-">– ohne MA –</option></select>`:''}
-      <button class="b" data-act="wSelPrint">🖨 Liste der markierten</button><button class="b d" data-act="wSelDel">🗑 Löschen</button><span class="sp"></span><button class="b sm" data-act="wSelNone">Auswahl aufheben</button><span class="mut" style="font-size:12px">Tipp: Shift + Klick markiert alle dazwischen</span></div>`})()}
+      <button class="b" data-act="wSelPrint">🖨 Liste der markierten</button><button class="b d" data-act="wSelDel">🗑 Löschen</button><span class="sp"></span><button class="b sm" data-act="wSelNone">Auswahl aufheben</button><span class="mut" style="font-size:12px">Shift + Klick markiert alle dazwischen · Änderung in einer markierten Zeile gilt für alle · Esc hebt auf</span></div>`})()}
     <div class="tw"><table class="bt wt" style="min-width:880px"><thead><tr><th style="width:34px"><input type="checkbox" class="wck" data-act="wSelAll" title="Alle angezeigten markieren" ${list.length&&list.every(w=>UI.wsel.has(w.id))?'checked':''}></th><th style="width:140px">Datum</th>${showMa?'<th style="width:180px">Mitarbeiter</th>':''}${tz?'<th>Von</th><th>Bis</th><th>Pause Min</th>':''}<th class="r" style="width:90px">Std.</th><th class="r" style="width:90px">Ansatz</th><th class="r" style="width:100px">CHF</th><th>Bemerkung</th><th></th></tr></thead><tbody>
     ${list.map(w=>`<tr data-id="${w.id}" class="${UI.wsel.has(w.id)?'wsel':''}"><td><input type="checkbox" class="wck" data-wsel="${w.id}" ${UI.wsel.has(w.id)?'checked':''}></td><td><input type="date" data-wf="date" value="${esc(w.date)}"></td>
       ${showMa?`<td><select data-wf="ma">${mas.map(m=>`<option value="${m.k}" ${maOf(w)===m.k?'selected':''}>${esc(m.n)}</option>`).join('')}<option value="" ${maOf(w)?'':'selected'}>– ohne MA –</option></select></td>`:''}
@@ -1784,7 +1789,7 @@ document.addEventListener('click',e=>{const t=e.target;if(!t||!t.dataset||!t.dat
   UI.wlast=id;const sc=window.scrollY,tw=document.querySelector('#v-arbeit .tw'),st=tw?tw.scrollTop:0;renderArbeit();window.scrollTo(0,sc);const t2=document.querySelector('#v-arbeit .tw');if(t2)t2.scrollTop=st});
 document.addEventListener('keydown',e=>{const t=e.target;if(e.key==='Enter'&&t&&t.dataset&&t.dataset.nw!==undefined){e.preventDefault();if(t.dataset.nw!=='ma'&&t.dataset.nw!=='date')WNEW[t.dataset.nw]=t.value;wAddNew()}});
 document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
-  if(t.type==='date'&&(d.bi||d.bf)){if(!t.value&&document.activeElement===t){t.dataset.pendEmpty='1';return}if(!dateOk(t.value))return}
+  if(t.type==='date'&&(d.bi||d.bf||d.wf)){if(!t.value&&document.activeElement===t){t.dataset.pendEmpty='1';return}if(!dateOk(t.value))return}
   if(d.surf){const p=pinById(UI.pin);if(!p)return;let v=t.value;if(v==='__new'){v=await newSurf();if(!v){renderPinPanel();return}}touch('pins',p.id);if(v)p.surf=v;else delete p.surf;await dbPut('pins',p);await relinkSurf();renderPinPanel();renderStage();
     const n=S.belege.reduce((x,b)=>x+(b.items||[]).filter(it=>it.pin==='o'&&it.surf===v).length,0);toast(v?`Oberfläche «${v}»${n?` – ${n} Beleg-Position(en) werden jetzt auch auf diesen Pin verteilt`:''}`:'Oberfläche entfernt',3000);return}
   if(d.up){const files=[...t.files];t.value='';if(files.length)await UP[d.up](files);return}
@@ -1808,13 +1813,15 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
     if(d.mq!==undefined){m.qty=parseAmount(t.value);m.qtyAuto=false}else m.price=parseAmount(t.value)===''?null:parseAmount(t.value);await dbPut('pins',p);renderPinPanel();return}
   if(d.ma){const m=maById(UI.wm);if(!m)return;if(d.ma==='n'){const n=t.value.trim();if(!n||maList().some(x=>x!==m&&x.n.toLowerCase()===n.toLowerCase())){toast(n?'Diesen Namen gibt es schon':'Name darf nicht leer sein',3000);t.value=m.n;return}m.n=n}else{m.rate=parseAmount(t.value);}await saveMas();renderArbeit();return}
   if(d.nw){if(!t.isConnected||t.closest('tr.wnew.done'))return;if(d.nw!=='ma'){const tr=t.closest('tr.wnew');if(tr)WNEW[d.nw]=t.value}else WNEW.ma=t.value;return}
-  if(d.wf==='ma'){const w=S.work.find(x=>x.id===t.closest('tr').dataset.id);if(!w)return;w.ma=t.value;await dbPut('work',w);renderArbeit();return}
+  if(d.wf==='ma'){const w=S.work.find(x=>x.id===t.closest('tr').dataset.id);if(!w)return;w.ma=t.value;await dbPut('work',w);if(UI.wsel.has(w.id)&&UI.wsel.size>1){await wSelApply(w,['ma']);return}renderArbeit();return}
   if(d.wf){const tr=t.closest('tr'),w=S.work.find(x=>x.id===tr.dataset.id);if(!w)return;
     if(d.wf==='von'||d.wf==='bis'){const v=parseTime(t.value);if(v===null){toast('Zeit bitte ohne Doppelpunkt eingeben, z.B. 0730 oder 1700',4000);t.value=w[d.wf]||'';return}w[d.wf]=v;t.value=v}
     else if(d.wf==='pause'){w.pause=parseInt(String(t.value).replace(/\D/g,''),10)||'';t.value=w.pause}
     else if(d.wf==='h'||d.wf==='rate'){const v=parseAmount(t.value);w[d.wf]=v;t.value=v===''?'':chf(v)}
     else w[d.wf]=t.value;
-    await dbPut('work',w);const hi=tr.querySelector('[data-wf="h"]');if(w.von&&w.bis){hi.value=chf(workHours(w));hi.readOnly=true}else hi.readOnly=false;
+    await dbPut('work',w);
+    if(UI.wsel.has(w.id)&&UI.wsel.size>1){await wSelApply(w,[d.wf]);return}
+    const hi=tr.querySelector('[data-wf="h"]');if(w.von&&w.bis){hi.value=chf(workHours(w));hi.readOnly=true}else hi.readOnly=false;
     tr.querySelector('.wb').textContent=chf(workCost(w));$('#wsum').innerHTML=workSumText();return}
   if(d.gwn!==undefined||d.gwc!==undefined){const l=gwList().map(x=>({...x})),i=+(d.gwn??d.gwc),g=l[i];if(!g)return;
     if(d.gwc!==undefined){g.c=t.value;await saveGwList(l);return}
@@ -1895,7 +1902,7 @@ document.addEventListener('input',e=>{const t=e.target;
   if(!t.dataset.f)return;const p=pinById(UI.pin);if(!p)return;touch('pins',p.id);p[t.dataset.f]=t.value;
   clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);
   if(t.dataset.f==='title'){const el=document.querySelector(`.pin[data-pin="${p.id}"]`);if(el)el.title=t.value}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#lb').hidden)$('#lb').hidden=true;else if(UI.draw){UI.draw=null;renderPlan()}else if(UI.mvPin){ACT.mvCancel()}else if(UI.add){UI.add=false;renderStage()}}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#lb').hidden)$('#lb').hidden=true;else if(UI.tab==='arbeit'&&UI.wsel.size){UI.wsel.clear();UI.wlast=null;renderArbeit()}else if(UI.draw){UI.draw=null;renderPlan()}else if(UI.mvPin){ACT.mvCancel()}else if(UI.add){UI.add=false;renderStage()}}});
 window.addEventListener('beforeunload',()=>{for(const id in saveTimers){clearTimeout(saveTimers[id]);const p=pinById(id);if(p)dbPut('pins',p)}});
 
 /* Pins setzen und verschieben */
