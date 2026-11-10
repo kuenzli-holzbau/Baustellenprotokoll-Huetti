@@ -569,7 +569,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='55 (10.11.2026, Zoll-Angaben in der Texterkennung)';
+const APP_VERSION='56 (11.11.2026, Export: Verknüpfungen, Abstimmung Belege)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1350,6 +1350,9 @@ async function applyGwMap(MAP){for(const x of S.pins)if(renameGw(x,MAP))await db
   for(const k of ['gf','pf','fg'])if(MAP[UI[k]]!==undefined)UI[k]=MAP[UI[k]];if(UI.bfl&&MAP[UI.bfl.gw]!==undefined)UI.bfl.gw=MAP[UI.bfl.gw];if(MAP[UI.opts.gw]!==undefined)UI.opts.gw=MAP[UI.opts.gw]}
 const gwPalette=['#0891b2','#65a30d','#ea580c','#7c3aed','#be123c','#0f766e','#a16207','#4338ca','#15803d','#b91c1c'];
 /* Position einem Pin zugeordnet → Beleg hängt automatisch im Material-Eintrag dieses Pins; nicht mehr gebraucht → wieder lösen */
+/* Positionen, die Pins zugeordnet sind, deren Beleg aber beim Pin fehlt (ältere Daten) → Verknüpfung nachholen */
+async function repairItemLinks(){let n=0;for(const b of S.belege){if(!(b.items||[]).length)continue;const want=(b.items||[]).flatMap(itPinIds);
+  if(want.some(pid=>{const p=pinById(pid);return p&&!pinBelegIds(p).includes(b.id)})){await syncItemLinks(b,'');await dbPut('belege',b);n++}}return n}
 async function syncItemLinks(b,old){b.itemLinks=b.itemLinks||[];const want=new Set((b.items||[]).flatMap(itPinIds));
   for(const pid of want){const p=pinById(pid);if(pinBelegIds(p).includes(b.id))continue;const e=p.entries.find(x=>isMatEntry(x))||lastEntry(p);if(!e)continue;await linkBeleg(p,e,b.id,b.gewerk||'');if(!b.itemLinks.includes(pid))b.itemLinks.push(pid)}
   for(const pid of [...b.itemLinks])if(!want.has(pid)){const p=pinById(pid),e=p&&entryWithBeleg(p,b.id);if(e)await unlinkBeleg(p,e,b.id);b.itemLinks=b.itemLinks.filter(x=>x!==pid)}}
@@ -1997,7 +2000,7 @@ const HOLZARTEN=/\b(Fichte|Tanne|Lärche|Eiche|Buche|Kiefer|Douglasie|Esche|Nuss
 function matSplit(name){let n=String(name||'').replace(/\s+/g,' ').trim(),t='',m;
   if(m=n.match(/\b[dD]\s*[:=]\s*(\d+(?:[.,]\d+)?)\s*mm/))t=m[1];
   else if(m=n.match(/Stärke\s*(\d+(?:[.,]\d+)?)\s*mm/i))t=m[1];
-  else{const re=/(^|[^:=Ø\w.,/])(\d+(?:[.,]\d+)?)\s*mm\b/g;let x;while(x=re.exec(n)){const pre=n.slice(Math.max(0,x.index-3),x.index+x[1].length);if(/[bBlLhH]\s*[:=]\s*$/.test(pre))continue;t=x[2];break}
+  else{const re=/(^|[^:=Ø\w.,/])(\d+(?:[.,]\d+)?)\s*mm\b/g;let x;while(x=re.exec(n)){const pre=n.slice(Math.max(0,x.index-3),x.index+x[1].length);if(/[bBlLhH]\s*[:=]\s*$/.test(pre)||/(l(ä|ae)nge|lang|breite)\s*$/i.test(n.slice(Math.max(0,x.index-14),x.index+x[1].length)))continue;t=x[2];break}
     if(!t&&(m=n.match(/(?:^|[\s,])(\d+(?:[.,]\d+)?)\s*x\s*\d+(?:[.,]\d+)?\s*mm/)))t=m[1]}
   const parts=n.split(',').map(x=>x.trim()).filter(Boolean),clean=x=>x.replace(/\b[dDbBlLhH]\s*[:=]\s*\d+(?:[.,]\d+)?\s*(?:-\s*\d+)?\s*m?m\b/g,'').replace(/\d+(?:[.,]\d+)?\s*x\s*\d+(?:[.,]\d+)?\s*mm/g,'').replace(/\b\d+(?:[.,]\d+)?\s*mm\b/g,'').replace(/\s+/g,' ').replace(/[\s:/-]+$/,'').trim();
   let mat=clean(parts[0]||n);
@@ -2014,7 +2017,7 @@ function holzSummary(ms){const g=new Map();for(const m of ms){if(!/^(m²|m2|m³|
 function matTable(ms,code){return `<table class="mt"><thead><tr>${code?'<th>Art.-Nr.</th>':''}<th>Material</th><th class="r">Menge</th><th>Einh.</th><th class="r">CHF/Einh.</th><th class="r">CHF</th></tr></thead><tbody>
   ${ms.map(m=>`<tr>${code?`<td>${esc(m.code||'–')}</td>`:''}<td>${esc(m.name)}${m.note&&!code?`<br><i style="color:#555">${esc(m.note)}</i>`:''}</td><td class="r">${qfmt(m.qty)}</td><td>${esc(m.unit)}</td><td class="r">${m.price==null?'':chf(mPrice(m))}</td><td class="r">${chf((+m.qty||0)*(+mPrice(m)||0))}</td></tr>`).join('')}
   <tr class="tot"><td colspan="${code?5:4}">Total</td><td class="r">${chf(matTotal(ms))}</td></tr></tbody></table>`}
-async function doPrint(){
+async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('Verknüpfungen repariert',n)}catch(e){console.warn(e)}
   const missing=S.blobs.filter(b=>!b.blob).length;if(missing&&!confirm(`${missing} Foto(s)/Beleg(e) sind noch nicht auf dieses Gerät geladen und würden im PDF fehlen. Trotzdem fortfahren?`))return;
   const o=UI.opts,P=S.project,fl=orderedFloors();toast('PDF wird vorbereitet …',60000);
   let h=`<section class="cover"><h1>${esc(P.name||'Baustellenprotokoll')}</h1>${o.gw?`<p class="addr" style="color:${GWC[o.gw]}">Auszug Gewerk ${esc(o.gw)}</p>`:''}${P.address?`<p class="addr">${esc(P.address)}</p>`:''}<table>
@@ -2051,10 +2054,12 @@ async function doPrint(){
     for(const f of fl)for(const grp of pinGroups(f,pinsOf(f.id).filter(p=>p.entries.some(eOk)))){if(!grp.pins.length)continue;let gb=0,gm=0;const rn=grp.room?grp.room.name:(roomsOf(f).length?'Ohne Zimmer':'–');
       for(const p of grp.pins){const bS=belegeByNr().filter(b=>pinBelegIds(p).includes(b.id)).reduce((x,b)=>x+gwShare(b,p.id,G),0),mS=matTotal(entriesOf(p).filter(eOk).flatMap(e=>e.mats));tb+=bS;tm+=mS;gb+=bS;gm+=mS;rows.push(`<tr><td>${esc(floorLabel(f))}</td><td>${esc(rn)}</td><td>${p.nr} ${esc(p.title||'')}</td><td class="r">${chf(bS)}</td><td class="r">${mS?chf(mS):''}</td><td class="r">${chf(bS+mS)}</td></tr>`)}
       if(roomsOf(f).length&&grp.pins.length>1)rows.push(`<tr class="sub"><td colspan="3">Total ${esc(floorLabel(f))} · ${esc(rn)}</td><td class="r">${chf(gb)}</td><td class="r">${gm?chf(gm):''}</td><td class="r">${chf(gb+gm)}</td></tr>`)}
-    const ohne=belegeByNr().filter(b=>(!G||belegHasGw(b,G))&&!S.pins.some(p=>pinBelegIds(p).includes(b.id)));const to=ohne.reduce((x,b)=>x+(+b.amount||0),0);
+    const unas=b=>{const br=belegBreakdown(b);let a=+b.amount||0;for(const v of br.m.values())a-=v;for(const v of Object.values(br.gen))a-=v;return c2(a)};const ohne=belegeByNr().filter(b=>(!G||belegHasGw(b,G))&&unas(b)>0.05);const to=ohne.reduce((x,b)=>x+unas(b),0);
     h+=`<section class="msum"><h2>Kostenübersicht nach Zimmer und Pin</h2><table class="mt"><thead><tr><th>Plan</th><th>Zimmer</th><th>Pin</th><th class="r">Belege CHF</th><th class="r">Holzbau-Material CHF</th><th class="r">Total CHF</th></tr></thead><tbody>${rows.join('')}
       <tr class="tot"><td colspan="3">Total Pins</td><td class="r">${chf(tb)}</td><td class="r">${tm?chf(tm):''}</td><td class="r">${chf(tb+tm)}</td></tr></tbody></table>
-      ${ohne.length?`<h3>Belege ohne Pin-Zuordnung</h3><table class="mt"><tbody>${ohne.map(b=>`<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td></tr>`).join('')}<tr class="tot"><td colspan="4">Total ohne Pin</td><td class="r">${chf(to)}</td></tr></tbody></table>`:''}</section>`}
+      ${(()=>{const gt={};for(const b of belegeByNr()){if(G&&!belegHasGw(b,G))continue;const br=belegBreakdown(b);for(const [k,v] of Object.entries(br.gen))gt[k]=c2((gt[k]||0)+v)}const gs=genList().filter(g=>gt[g.k]);const tot=c2(tb+gs.reduce((x,g)=>x+gt[g.k],0)+to);
+        return `<h3>Abstimmung Belege</h3><table class="mt"><tbody><tr><td>Belege auf Pins</td><td class="r">${chf(tb)}</td></tr>${gs.map(g=>`<tr><td>Kostenstelle ${esc(g.n)}</td><td class="r">${chf(gt[g.k])}</td></tr>`).join('')}${to?`<tr><td>Nicht zugeordnet</td><td class="r">${chf(to)}</td></tr>`:''}<tr class="tot"><td>Total Belege</td><td class="r">${chf(tot)}</td></tr></tbody></table>`})()}
+      ${ohne.length?`<h3>Belege bzw. Beträge ohne Zuordnung (weder Pin noch Kostenstelle)</h3><table class="mt"><tbody>${ohne.map(b=>`<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td class="r">${chf(unas(b))}${Math.abs(unas(b)-(+b.amount||0))>0.05?`<br><small style="color:#666">von ${chf(b.amount)}</small>`:''}</td></tr>`).join('')}<tr class="tot"><td colspan="4">Total nicht zugeordnet</td><td class="r">${chf(to)}</td></tr></tbody></table>`:''}</section>`}
   if(o.mats&&allMats().length&&(!o.gw||o.gw==='Holzbau')){const all=allMats();
     h+=`<section class="msum"><h2>Materialbezug</h2><p style="color:#666">Summe aller Einträge pro Gewerk. Holzbau: Netto-Einkaufspreise gemäss Regiepreisliste S-0113${S.project.zOn?` zuzüglich ${qfmt(zPct())} % Zuschlag`:''}; übrige Gewerke: erfasste Preise der Lieferanten.</p>`;
     for(const g of GEWERKE){const ms=all.filter(m=>(m.gw||'Holzbau')===g);if(!ms.length)continue;const agg=new Map();
@@ -2084,7 +2089,7 @@ async function doPrint(){
     ${mm?`<h3>Nach Mitarbeiter</h3><table class="mt"><thead><tr><th>Mitarbeiter</th><th class="r">Std.</th><th class="r">CHF</th></tr></thead><tbody>${[...new Set(ws.map(maOf))].map(k=>{const l=ws.filter(w=>maOf(w)===k);return `<tr><td>${esc(maName(k))}</td><td class="r">${chf(sumH(l))}</td><td class="r">${chf(sumC(l))}</td></tr>`}).join('')}</tbody></table>`:''}<h3>Nach Jahr</h3><table class="mt"><thead><tr><th>Jahr</th><th class="r">Std.</th><th class="r">CHF</th></tr></thead><tbody>${[...yr].sort().map(([y,[hh,c]])=>`<tr><td>${y}</td><td class="r">${chf(hh)}</td><td class="r">${chf(c)}</td></tr>`).join('')}</tbody></table></section>`}
   {const bT=bs.reduce((x,b)=>x+bAmt(b),0),mT=matTotal(G?allMats().filter(m=>(m.gw||'Holzbau')===G):allMats()),wT=APP.work&&!G?sumC(S.work):0,wH=APP.work&&!G?sumH(S.work):0;
     h+=`<section class="msum"><h2>Gesamtbetrag Projekt${G?' – Gewerk '+esc(G):''}</h2><table class="mt" style="font-size:11pt"><tbody>
-    <tr><td>Belege</td><td class="r">CHF ${chf(bT)}</td></tr>${mT?`<tr><td>Material (erfasste Mengen, Netto-Preise)</td><td class="r">CHF ${chf(mT)}</td></tr>`:''}${wH?`<tr><td>Arbeitszeit (${hfmt(wH)})</td><td class="r">CHF ${chf(wT)}</td></tr>`:''}
+    <tr><td>Belege</td><td class="r">CHF ${chf(bT)}</td></tr>${mT?`<tr><td>Material (erfasste Mengen, Regiepreisliste${S.project.zOn?` + ${qfmt(zPct())} % Zuschlag`:', Netto-Preise'})</td><td class="r">CHF ${chf(mT)}</td></tr>`:''}${wH?`<tr><td>Arbeitszeit (${hfmt(wH)})</td><td class="r">CHF ${chf(wT)}</td></tr>`:''}
     <tr class="tot"><td>Gesamtbetrag</td><td class="r">CHF ${chf(bT+mT+wT)}</td></tr></tbody></table></section>`}
   if(o.att){const tmpUrls=[];window._attUrls=(window._attUrls||[]).concat(tmpUrls);let k=0;
     for(const b of bs){const f=blobMap.get(b.fileId),isPdf=f&&f.mime==='application/pdf'&&f.blob;if(!b.previewId&&!isPdf)continue;k++;let pages=b.previewId?[urlOf(b.previewId)]:[];
@@ -2255,7 +2260,7 @@ function setSync(st,label){SSTATE=st;const b=$('#syncBtn');if(!b)return;b.classN
 async function syncNow(manual){if(!cloudOn()||!SES)return;if(syncing){syncAgain=true;return}
   if(!navigator.onLine){setSync('off');if(manual)toast('Keine Internetverbindung');return}
   syncing=true;setSync('busy');
-  try{await firstUpload();await pull();await push();const q=await queueCount();setSync(q?'pend':'ok');if(manual)toast(q?'Noch nicht alles hochgeladen':'Alles synchronisiert')}
+  try{await firstUpload();await pull();if(!window._linkFix){window._linkFix=1;try{await repairItemLinks()}catch(e){console.warn(e)}}await push();const q=await queueCount();setSync(q?'pend':'ok');if(manual)toast(q?'Noch nicht alles hochgeladen':'Alles synchronisiert')}
   catch(e){console.warn(e);lastErr=e.message;setSync(e instanceof TypeError||!navigator.onLine?'off':'err');if(manual)toast(syncText(),5000)}
   finally{syncing=false;if(syncAgain){syncAgain=false;setTimeout(()=>syncNow(),800)}}
   downloadMissing()}
