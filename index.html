@@ -270,6 +270,7 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .emv .b:disabled{opacity:.35;cursor:default}
 .gwl{display:flex;flex-direction:column;gap:6px;margin-top:8px}
 .gwr{display:flex;align-items:center;gap:6px}
+.fahrt{display:flex;align-items:center;gap:4px;margin-top:5px;font-size:12px}.fahrt input{width:56px;padding:4px 5px;text-align:right;border:1px solid #d0d7de!important;border-radius:6px;background:#fff}.fahrt small{color:var(--mut);white-space:nowrap}
 /* Beleg-Status (nur in der App, nicht im Export) */
 select.bst{background:var(--c,#9ca3af);color:#fff;font-weight:600;font-size:12px;border:1px solid var(--c,#9ca3af);border-radius:7px;padding:5px 4px;width:100%;min-width:150px}
 select.bst option{font-weight:600}
@@ -569,7 +570,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='56 (11.11.2026, Export: Verknüpfungen, Abstimmung Belege)';
+const APP_VERSION='57 (17.11.2026, Fahrspesen je Beleg)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1400,11 +1401,20 @@ function pstList(){const w=String(UI.pstQ||'').toLowerCase().split(/\s+/).filter
   return `<div class="tw pst"><table class="bt"><thead><tr><th>Art.-Nr.</th><th>Bezeichnung</th><th>Einh.</th><th class="r">Netto</th>${S.project.zOn?`<th class="r">+${qfmt(zPct())} %</th>`:''}</tr></thead><tbody>
     ${sh.map(k=>`<tr><td class="mut" style="white-space:nowrap">${k[0]}</td><td>${esc(k[1])}</td><td>${esc(k[2])}</td><td class="r">${k[3]==null?'–':chf(k[3])}</td>${S.project.zOn?`<td class="r"><b>${k[3]==null?'–':chf(katPrice(k))}</b></td>`:''}</tr>`).join('')}</tbody></table></div>
     <p class="mut" style="font-size:12px;margin:6px 0 0">${L.length?`${sh.length} von ${L.length} Artikel${L.length>sh.length?` · <a data-act="pstMore">weitere anzeigen</a>`:''}`:'Kein Artikel gefunden.'}</p>`}
+/* ---------- Fahrspesen je Beleg (Fahrzeit + km), z.B. für Einkäufe im Bauhaus ---------- */
+const spesLief=()=>String(S.project.spesLief!=null?S.project.spesLief:'Bauhaus').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+const hasFahrt=b=>!!(+b.fahrH||+b.fahrKm);
+const isSpesen=b=>hasFahrt(b)||spesLief().some(x=>(b.supplier||'').toLowerCase().includes(x));
+const kmRate=()=>S.project.kmRate!=null&&S.project.kmRate!==''?+S.project.kmRate:0.70;
+const fahrRate=()=>S.project.fahrRate!=null&&S.project.fahrRate!==''?+S.project.fahrRate:(typeof projRate==='function'?projRate():0);
+const fahrCost=b=>rnd2((+b.fahrH||0)*fahrRate()+(+b.fahrKm||0)*kmRate());
+const parseDur=v=>{v=String(v||'').trim();if(!v)return '';const m=v.match(/^(\d+):(\d{1,2})$/);if(m)return rnd2(+m[1]+ +m[2]/60);const n=parseAmount(v);return n===''?'':n};
+function spesTotals(list){const l=(list||S.belege).filter(hasFahrt);return {n:l.length,h:rnd2(l.reduce((x,b)=>x+(+b.fahrH||0),0)),km:rnd2(l.reduce((x,b)=>x+(+b.fahrKm||0),0)),chf:rnd2(l.reduce((x,b)=>x+fahrCost(b),0))}}
 /* ---------- Kostenübersicht (Kopfzeile Σ und Reiter Export) ---------- */
 function costTotals(){const b=S.belege.reduce((x,y)=>x+(+y.amount||0),0),m=matTotal(allMats()),w=APP.work?sumC(S.work):0,wh=APP.work?sumH(S.work):0;
   const byGw=GEWERKE.map(g=>[g,matTotal(allMats().filter(x=>(x.gw||'Holzbau')===g))]).filter(x=>x[1]);let open=0;const gen={};
   for(const x of S.belege){const br=belegBreakdown(x);for(const k in br.gen)gen[k]=rnd2((gen[k]||0)+br.gen[k]);if(br.hasItems)open+=br.open;else if(!belegCost(x)&&!S.pins.some(p=>pinBelegIds(p).includes(x.id)))open+=+x.amount||0}
-  return {b,m,w,wh,byGw,nb:S.belege.length,t:rnd2(b+m+w),gen,allg:gen.allg||0,open:rnd2(open)}}
+  const sp=spesTotals();return {b,m,w,wh,sp,byGw,nb:S.belege.length,t:rnd2(b+m+w+sp.chf),gen,allg:gen.allg||0,open:rnd2(open)}}
 function costHtml(){const c=costTotals();
   return `<table class="tott"><tbody>
     <tr><td>🧾 Belege <small>(${c.nb})</small></td><td class="r">CHF ${chf(c.b)}</td></tr>
@@ -1413,6 +1423,7 @@ function costHtml(){const c=costTotals();
     <tr><td>🪵 Material${S.project.zOn?` <small>(Holzbau inkl. ${qfmt(zPct())} %)</small>`:''}</td><td class="r">CHF ${chf(c.m)}</td></tr>
     ${c.byGw.length>1?c.byGw.map(([g,v])=>`<tr class="sub"><td>${esc(g)}</td><td class="r">${chf(v)}</td></tr>`).join(''):''}
     ${APP.work?`<tr><td>⏱ Arbeitszeit <small>(${hfmt(c.wh)})</small></td><td class="r">CHF ${chf(c.w)}</td></tr>`:''}
+    ${c.sp.n?`<tr><td>🚗 Fahrspesen <small>(${c.sp.n} Fahrt${c.sp.n>1?'en':''} · ${chf(c.sp.h)} h · ${qfmt(c.sp.km)} km)</small></td><td class="r">CHF ${chf(c.sp.chf)}</td></tr>`:''}
     <tr class="all"><td>Total</td><td class="r">CHF ${chf(c.t)}</td></tr></tbody></table>`}
 function updTotBtn(){const v=$('#totVal');if(v)v.textContent='CHF '+chf(costTotals().t)}
 setInterval(()=>{if(!document.hidden)updTotBtn()},3000);
@@ -1467,7 +1478,7 @@ function _renderBelege(){
         <button class="bitog ${UI.bOpen&&UI.bOpen.has(b.id)?'on':''}" data-act="bItems" data-id="${b.id}">${UI.bOpen&&UI.bOpen.has(b.id)?'▾':'▸'} ${(b.items||[]).length?(b.items.length+' Position'+(b.items.length>1?'en':'')):'Positionen'}${(b.items||[]).length&&belegBreakdown(b).openN?' <span class="bad">⚠ offen</span>':''}</button></td>
       <td><select data-bf="category">${CATS.map(c=>`<option ${b.category===c?'selected':''}>${c}</option>`).join('')}</select></td>
       <td><select data-bf="gewerk"><option value="">–</option>${GEWERKE.map(g=>`<option ${b.gewerk===g?'selected':''}>${g}</option>`).join('')}</select></td>
-      <td><input class="r ${b.auto&&b.auto.amount?'auto':''}" data-bf="amount" inputmode="decimal" value="${b.amount===''||b.amount==null?'':chf(b.amount)}" placeholder="0.00"></td>
+      <td><input class="r ${b.auto&&b.auto.amount?'auto':''}" data-bf="amount" inputmode="decimal" value="${b.amount===''||b.amount==null?'':chf(b.amount)}" placeholder="0.00">${isSpesen(b)?`<div class="fahrt" title="Fahrspesen zu diesem Einkauf: Fahrzeit (Std., z.B. 1.5 oder 1:30) und gefahrene km"><span>🚗</span><input data-bf="fahrH" inputmode="decimal" value="${+b.fahrH?chf(b.fahrH):''}" placeholder="Std."><input data-bf="fahrKm" inputmode="decimal" value="${+b.fahrKm?qfmt(b.fahrKm):''}" placeholder="km"><small>${hasFahrt(b)?'CHF '+chf(fahrCost(b)):'Fahrt'}</small></div>`:''}</td>
       <td>${pins.length>1&&!(b.items||[]).length?(()=>{const sh=belegShares(b),sp=b.split||{},d=splitDiff(b);return `<div class="spl">${pins.map(p=>`<div><a class="pb" data-act="gotoPin" data-id="${p.id}" data-b="${b.id}" title="${esc(p.title)}">${esc(fn(p.floorId))} ${p.nr}</a><input class="spi" data-split="${p.id}" inputmode="decimal" value="${sp[p.id]!==undefined&&sp[p.id]!==''?chf(sp[p.id]):''}" placeholder="${chf(sh.get(p.id)||0)}" title="Anteil CHF für diesen Pin (leer = gleichmässig)"></div>`).join('')}<small class="${d?'bad':'mut'}">${d?'Differenz CHF '+chf(d):splitModeTxt(b)}</small></div>`})()
         :pins.map(p=>`<a class="pb" data-act="gotoPin" data-id="${p.id}" data-b="${b.id}" title="${esc(p.title)}">${esc(fn(p.floorId))} ${p.nr}${(b.items||[]).length?' · '+chf(belegShares(b).get(p.id)||0):''}</a>`).join(' ')}${(b.items||[]).length&&pins.length&&![...belegShares(b).values()].some(v=>v)?'<small class="bad" style="display:block">Positionen haben eigene Zuordnung → «↺ Alle wie Beleg»</small>':''}
         ${belegCost(b)?`<span class="pb costchip">${esc(genList().find(g=>g.k===belegCost(b)).n)} <a data-act="rmBCost" data-id="${b.id}" title="Kostenstelle entfernen">×</a></span>`:''}
@@ -1508,6 +1519,11 @@ function renderExport(){
      <span class="mut" style="font-size:12px">${S.project.zOn?'aktiv – Preise × '+qfmt(zFac()):'aus – Netto-Preise'}</span></div>
    <input id="pstQ" data-pstq placeholder="🔍 Artikel suchen, z.B. OSB 18 oder 101.149" value="${esc(UI.pstQ||'')}" style="width:100%;margin-top:10px">
    <div id="pstList">${pstList()}</div></div>
+   <div class="card"><h2>Fahrspesen</h2><p class="mut" style="font-size:13px">Bei Belegen dieser Lieferanten erscheinen unter dem Betrag Felder für Fahrzeit und km. Die Spesen erscheinen in der Kostenübersicht und im Export als eigener Posten.</p>
+   <p class="gwr"><span style="width:160px">Lieferanten</span><input data-pf="spesLief" value="${esc(S.project.spesLief!=null?S.project.spesLief:'Bauhaus')}" placeholder="Bauhaus, Jumbo" style="flex:1"></p>
+   <p class="gwr"><span style="width:160px">CHF pro km</span><input data-pf="kmRate" inputmode="decimal" value="${S.project.kmRate!=null&&S.project.kmRate!==''?chf(S.project.kmRate):''}" placeholder="0.70" style="width:110px"></p>
+   <p class="gwr"><span style="width:160px">Fahrzeit CHF pro Std.</span><input data-pf="fahrRate" inputmode="decimal" value="${S.project.fahrRate!=null&&S.project.fahrRate!==''?chf(S.project.fahrRate):''}" placeholder="${chf(fahrRate())}" style="width:110px"><small class="mut">leer = Stundenansatz</small></p>
+   ${(()=>{const t=spesTotals();return t.n?`<p class="mut" style="font-size:13px">Bisher: ${t.n} Fahrt${t.n>1?'en':''} · ${chf(t.h)} h · ${qfmt(t.km)} km = <b>CHF ${chf(t.chf)}</b></p>`:''})()}</div>
    <div class="card"><h2>Kostenstellen ohne Pin</h2><p class="mut" style="font-size:13px">Für Beleg-Positionen, die keinem Pin gehören. Erscheinen in der Kostenübersicht und im PDF je mit eigenem Abschnitt.</p>
    <div class="gwl">${genList().map(g=>`<div class="gwr">${g.fix?`<input value="${esc(g.n)}" readonly title="fest">`:`<input data-cost="${g.k}" value="${esc(g.n)}">`}<span class="gwu">${costUse(g.k)?costUse(g.k)+' Pos.':''}</span>${g.fix?'<span style="width:30px"></span>':`<button class="b d sm" data-act="costDel" data-id="${g.k}" title="Kostenstelle löschen">×</button>`}</div>`).join('')}</div>
    <p style="display:flex;gap:6px;margin-top:10px"><input id="costNew" placeholder="Neue Kostenstelle, z.B. Gerüst" style="flex:1"><button class="b p" data-act="costAdd">+ Kostenstelle</button></p></div>
@@ -1873,12 +1889,13 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(d.opt){UI.opts[d.opt]=t.checked;return}
   if(d.room){const f=curFloor(),r=f&&(f.rooms||[]).find(x=>x.id===d.room);if(!r||!t.value.trim())return renderPlan();r.name=t.value.trim();await dbPut('floors',f);renderStage();renderPinPanel();return}
   if(d.bld){const b=bldById(d.bld);if(!b||!t.value.trim())return renderPlan();b.name=t.value.trim();await dbPut('buildings',b);renderFloorList();renderStage();return}
-  if(d.pf){S.project[d.pf]=t.value;await dbPut('kv',S.project);if(d.pf==='name')document.querySelectorAll('[data-pf="name"]').forEach(i=>{if(i!==t)i.value=t.value});if(d.pf==='rate'){const v=parseAmount(t.value);S.project.rate=v;await dbPut('kv',S.project);renderArbeit()}return}
+  if(d.pf){S.project[d.pf]=t.value;await dbPut('kv',S.project);if(d.pf==='name')document.querySelectorAll('[data-pf="name"]').forEach(i=>{if(i!==t)i.value=t.value});if(d.pf==='rate'){const v=parseAmount(t.value);S.project.rate=v;await dbPut('kv',S.project);renderArbeit()}if(d.pf==='kmRate'||d.pf==='fahrRate'){S.project[d.pf]=parseAmount(t.value);await dbPut('kv',S.project);renderExport()}if(d.pf==='spesLief'){renderExport()}return}
   if(d.split){const b=belegById(t.closest('tr').dataset.id);if(!b)return;b.split=b.split||{};const v=parseAmount(t.value);if(v==='')delete b.split[d.split];else b.split[d.split]=v;await dbPut('belege',b);renderBelege();return}
   if(d.bf==='status'){const b=belegById(t.closest('tr').dataset.id);if(!b)return;let v=t.value;if(v==='__new'){v=await newStatus();if(!v){renderBelege();return}}
     b.status=v==='offen'?'':v;if(!b.status)delete b.status;await dbPut('belege',b);renderBelege();return}
   if(d.bf){const b=belegById(t.closest('tr').dataset.id);if(!b)return;if(d.bf==='date'&&!dateOk(t.value))return;if(b.auto&&b.auto[d.bf]){b.auto[d.bf]=false;t.classList.remove('auto')}if(d.bf==='date')b.dateAuto=false;
     if(d.bf==='amount'){b.amount=parseAmount(t.value);t.value=b.amount===''?'':chf(b.amount)}
+    else if(d.bf==='fahrH'||d.bf==='fahrKm'){const v=d.bf==='fahrH'?parseDur(t.value):parseAmount(t.value);if(v===''||!+v)delete b[d.bf];else b[d.bf]=v;await dbPut('belege',b);renderBelege();updTotBtn();return}
     else if(d.bf==='gewerk'){const old=b.gewerk||'';b.gewerk=t.value;for(const p of S.pins){let ch=false;for(const e of p.entries)if(e.belegIds.includes(b.id)&&(e.belegGw[b.id]||'')===old){e.belegGw[b.id]=b.gewerk;ch=true}if(ch)await dbPut('pins',p)}}
     else if(d.bf==='desc'){b.desc=t.value.slice(0,DESC_MAX);t.title=b.desc}
     else b[d.bf]=t.value;
@@ -2081,16 +2098,20 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
       br.items.filter(x=>x.m&&x.m.has(GK.k)).forEach(x=>rows.push(`<tr><td>${itemNo(b,(b.items||[]).indexOf(x.it))}</td><td>${fmtDate(itDate(b,x.it))}</td><td>${esc(b.supplier||'')}</td><td>${esc(x.it.name)}${x.it.qty?' · '+esc(x.it.qty):''}</td><td class="r">${chf(x.it.amount)}</td></tr>`));
       if(br.restMap.get(GK.k))rows.push(`<tr><td>B-${pad(b.nr)}</td><td></td><td></td><td><i>Anteil Rest (MWST/Rundung/Rabatt)</i></td><td class="r">${chf(br.restMap.get(GK.k))}</td></tr>`);tot+=br.gen[GK.k]}
     if(rows.length)h+=`<section class="msum"><h2>${GK.h}</h2><table class="mt"><thead><tr><th>Pos.</th><th>Datum</th><th>Lieferant</th><th>Artikel</th><th class="r">CHF</th></tr></thead><tbody>${rows.join('')}<tr class="tot"><td colspan="4">Total ${GK.n}</td><td class="r">${chf(tot)}</td></tr></tbody></table></section>`}
+  {const fl=belegeByNr().filter(hasFahrt);if(fl.length&&!G){const t=spesTotals(fl);
+    h+=`<section class="msum"><h2>Fahrspesen</h2><p style="color:#666">Fahrzeit CHF ${chf(fahrRate())}/Std., Fahrkosten CHF ${chf(kmRate())}/km</p><table class="mt"><thead><tr><th>Beleg</th><th>Datum</th><th>Lieferant</th><th class="r">Fahrzeit Std.</th><th class="r">km</th><th class="r">CHF</th></tr></thead><tbody>
+    ${fl.map(b=>`<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier||'')}</td><td class="r">${+b.fahrH?chf(b.fahrH):''}</td><td class="r">${+b.fahrKm?qfmt(b.fahrKm):''}</td><td class="r">${chf(fahrCost(b))}</td></tr>`).join('')}
+    <tr class="tot"><td colspan="3">Total Fahrspesen</td><td class="r">${chf(t.h)}</td><td class="r">${qfmt(t.km)}</td><td class="r">${chf(t.chf)}</td></tr></tbody></table></section>`}}
   if(APP.work&&o.work&&!G&&S.work.length){const ws=workSorted(),mm=new Set(ws.map(maOf)).size>1||ws.some(maOf),tz=ws.some(w=>w.von||w.bis),yr=new Map(),rt=new Set(ws.map(workRate));
     for(const w of ws){const y=(w.date||'').slice(0,4)||'ohne Datum',a=yr.get(y)||[0,0];a[0]+=workHours(w);a[1]+=workCost(w);yr.set(y,a)}
     h+=`<section class="msum"><h2>Arbeitszeit</h2>${rt.size===1?`<p style="color:#666">Stundenansatz CHF ${chf([...rt][0])}</p>`:''}<table class="mt"><thead><tr><th>Datum</th>${mm?'<th>Mitarbeiter</th>':''}${tz?'<th>Von</th><th>Bis</th><th class="r">Pause</th>':''}<th>Bemerkung</th><th class="r">Std.</th>${rt.size>1?'<th class="r">Ansatz</th>':''}<th class="r">CHF</th></tr></thead><tbody>
     ${ws.map(w=>`<tr><td>${fmtDate(w.date)}</td>${mm?`<td>${esc(maName(maOf(w)))}</td>`:''}${tz?`<td>${esc(w.von||'')}</td><td>${esc(w.bis||'')}</td><td class="r">${w.pause?w.pause+' Min':''}</td>`:''}<td>${esc(w.note||'')}</td><td class="r">${chf(workHours(w))}</td>${rt.size>1?`<td class="r">${chf(workRate(w))}</td>`:''}<td class="r">${chf(workCost(w))}</td></tr>`).join('')}
     <tr class="tot"><td colspan="${(tz?5:2)+(mm?1:0)}">Total Arbeitszeit</td><td class="r">${chf(sumH(ws))}</td>${rt.size>1?'<td></td>':''}<td class="r">${chf(sumC(ws))}</td></tr></tbody></table>
     ${mm?`<h3>Nach Mitarbeiter</h3><table class="mt"><thead><tr><th>Mitarbeiter</th><th class="r">Std.</th><th class="r">CHF</th></tr></thead><tbody>${[...new Set(ws.map(maOf))].map(k=>{const l=ws.filter(w=>maOf(w)===k);return `<tr><td>${esc(maName(k))}</td><td class="r">${chf(sumH(l))}</td><td class="r">${chf(sumC(l))}</td></tr>`}).join('')}</tbody></table>`:''}<h3>Nach Jahr</h3><table class="mt"><thead><tr><th>Jahr</th><th class="r">Std.</th><th class="r">CHF</th></tr></thead><tbody>${[...yr].sort().map(([y,[hh,c]])=>`<tr><td>${y}</td><td class="r">${chf(hh)}</td><td class="r">${chf(c)}</td></tr>`).join('')}</tbody></table></section>`}
-  {const bT=bs.reduce((x,b)=>x+bAmt(b),0),mT=matTotal(G?allMats().filter(m=>(m.gw||'Holzbau')===G):allMats()),wT=APP.work&&!G?sumC(S.work):0,wH=APP.work&&!G?sumH(S.work):0;
+  {const spT=G?{chf:0}:spesTotals(),bT=bs.reduce((x,b)=>x+bAmt(b),0),mT=matTotal(G?allMats().filter(m=>(m.gw||'Holzbau')===G):allMats()),wT=APP.work&&!G?sumC(S.work):0,wH=APP.work&&!G?sumH(S.work):0;
     h+=`<section class="msum"><h2>Gesamtbetrag Projekt${G?' – Gewerk '+esc(G):''}</h2><table class="mt" style="font-size:11pt"><tbody>
-    <tr><td>Belege</td><td class="r">CHF ${chf(bT)}</td></tr>${mT?`<tr><td>Material (erfasste Mengen, Regiepreisliste${S.project.zOn?` + ${qfmt(zPct())} % Zuschlag`:', Netto-Preise'})</td><td class="r">CHF ${chf(mT)}</td></tr>`:''}${wH?`<tr><td>Arbeitszeit (${hfmt(wH)})</td><td class="r">CHF ${chf(wT)}</td></tr>`:''}
-    <tr class="tot"><td>Gesamtbetrag</td><td class="r">CHF ${chf(bT+mT+wT)}</td></tr></tbody></table></section>`}
+    <tr><td>Belege</td><td class="r">CHF ${chf(bT)}</td></tr>${mT?`<tr><td>Material (erfasste Mengen, Regiepreisliste${S.project.zOn?` + ${qfmt(zPct())} % Zuschlag`:', Netto-Preise'})</td><td class="r">CHF ${chf(mT)}</td></tr>`:''}${wH?`<tr><td>Arbeitszeit (${hfmt(wH)})</td><td class="r">CHF ${chf(wT)}</td></tr>`:''}${spT.chf?`<tr><td>Fahrspesen (${spT.n} Fahrt${spT.n>1?'en':''} · ${chf(spT.h)} h · ${qfmt(spT.km)} km)</td><td class="r">CHF ${chf(spT.chf)}</td></tr>`:''}
+    <tr class="tot"><td>Gesamtbetrag</td><td class="r">CHF ${chf(bT+mT+wT+spT.chf)}</td></tr></tbody></table></section>`}
   if(o.att){const tmpUrls=[];window._attUrls=(window._attUrls||[]).concat(tmpUrls);let k=0;
     for(const b of bs){const f=blobMap.get(b.fileId),isPdf=f&&f.mime==='application/pdf'&&f.blob;if(!b.previewId&&!isPdf)continue;k++;let pages=b.previewId?[urlOf(b.previewId)]:[];
       if(f&&f.mime==='application/pdf'&&f.blob){try{const doc=await openPdf(f.blob);if(doc.numPages>1||!b.previewId){pages=[];for(let i=1;i<=doc.numPages;i++){toast(`PDF wird erstellt – Beleg B-${pad(b.nr)}, Seite ${i} von ${doc.numPages} …`,60000);const u=URL.createObjectURL(await renderPdfPage(doc,i,1700));tmpUrls.push(u);pages.push(u)}}}catch(e){console.warn(e)}}
