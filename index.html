@@ -386,6 +386,9 @@ select.bst option{font-weight:600}
 .efoot{display:flex;justify-content:flex-end;margin-top:12px}
 .mtot{text-align:right;font-weight:700;margin:2px 0 8px;font-size:13px}
 .katq{width:100%;padding:9px;border:1px solid var(--line);border-radius:7px;font-size:14px}
+.ml.swapping{outline:2px solid #0f766e;outline-offset:1px}
+.swp{margin:6px 0 4px;padding:8px;background:#f0fdfa;border-radius:7px}
+.mlh button[data-act="swapMat"]{margin-left:auto}
 .katres{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:7px;margin:4px 0 8px;background:#fff}
 .katres:empty{display:none}
 .kr{padding:8px 10px;border-bottom:1px solid #f0ede7;cursor:pointer;font-size:13px}
@@ -607,7 +610,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='62 (22.11.2026, Preisstamm bearbeiten)';
+const APP_VERSION='63 (22.11.2026, Artikel ersetzen)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1152,7 +1155,8 @@ function entryEditor(p,e){const noPh=entKind(e)==='km';
     const own=g?avail.filter(b=>b.gewerk===g):[],none=avail.filter(b=>!b.gewerk),oth=avail.filter(b=>b.gewerk&&b.gewerk!==g);
     return `<select data-ch="link" data-gw="${g}"><option value="">+ Beleg ${g?'für '+g+' ':''}zuordnen …</option>${own.length?`<optgroup label="${g}">${own.map(opt).join('')}</optgroup>`:''}${none.length?`<optgroup label="Ohne Gewerk">${none.map(opt).join('')}</optgroup>`:''}${oth.length?`<optgroup label="${g?'Andere Gewerke':'Mit Gewerk'}">${oth.map(opt).join('')}</optgroup>`:''}</select>`};
   const mats=g=>{const ls=matsOf(e,g),sup=supplierOf(g);return `<div class="mats"><div class="lbl" style="margin:2px 0 4px">Material${g==='Holzbau'?' aus Preisliste (netto)':' · Lieferant '+sup}</div>
-    ${ls.map(([m,i])=>{const np=m.price==null||m.price==='';return `<div class="ml"><div class="mlh"><span>${esc(m.name)}</span><button data-act="rmMat" data-id="${i}" title="Material entfernen">×</button></div>
+    ${ls.map(([m,i])=>{const np=m.price==null||m.price==='';return `<div class="ml ${swapOn(e,i)?'swapping':''}"><div class="mlh"><span>${esc(m.name)}</span><button data-act="swapMat" data-id="${i}" data-gw="${g}" title="Anderen Artikel wählen – Menge bleibt">⇄</button><button data-act="rmMat" data-id="${i}" title="Material entfernen">×</button></div>
+      ${swapOn(e,i)?`<div class="swp"><div class="lbl" style="display:flex;gap:8px;align-items:center"><span style="flex:1">Artikel ersetzen – Menge ${qfmt(m.qty)||'–'} ${esc(m.unit)} und Beschreibung bleiben</span><button class="b sm" data-act="swapX">Abbrechen</button></div><input class="katq" data-katq data-gw="${g}" data-swq value="${esc(UI.swap.q||'')}" placeholder="🔍 Neuen Artikel suchen …" autocomplete="off"><div class="katres">${katSearch(UI.swap.q||'',g)}</div></div>`:''}
       <small>${[m.code?esc(m.code):'',m.src&&m.src!=='Regiepreisliste'?esc(m.src):'',np?'kein Preis':'CHF '+chf(mPrice(m))+' / '+esc(m.unit)+zTag(m)].filter(Boolean).join(' · ')}${m.url?` · <a class="lk" href="${esc(m.url)}" target="_blank" rel="noopener">🔗 Shop</a>`:''}</small>
       <div class="mlr">Menge <input data-mq="${i}" inputmode="decimal" value="${qfmt(m.qty)}" placeholder="0"> ${esc(m.unit)}${m.qtyAuto&&isM2(m.unit)&&matFactor(e,m)>1?` <span class="mf">(${qfmt(entM2(e))} m² × ${matFactor(e,m)})</span>`:''}${np?` · Preis CHF <input data-mp="${i}" inputmode="decimal" placeholder="0.00">`:''}<span class="lt">CHF ${chf((+m.qty||0)*(+mPrice(m)||0))}</span></div>
       <input class="mnote" data-mn="${i}" value="${esc(m.note||'')}" placeholder="Beschreibung, z.B. ${g==='Elektro'?'Steckdose Küche':'Beplankung Wand Nord'}"></div>`}).join('')}
@@ -1691,6 +1695,11 @@ async function createBld(name,area){const b={id:uid(),name,order:Math.max(0,...S
   const free=floorsOfBld(null);
   if(S.buildings.length===1&&free.length&&confirm(`Die bestehenden Geschosse (${free.map(f=>f.name).join(', ')}) dem Gebäude «${name}» zuordnen?`))for(const f of free){f.buildingId=b.id;await dbPut('floors',f)}
   return b}
+/* Material-Position: anderen Artikel wählen, Menge und Beschreibung bleiben */
+const swapOn=(e,i)=>!!(UI.swap&&UI.swap.e===e.id&&UI.swap.i===i);
+function putMat(e,m){const sw=UI.swap;if(sw&&sw.e===e.id&&e.mats[sw.i]){const o=e.mats[sw.i];m.qty=o.qty;if(o.note)m.note=o.note;m.gw=o.gw||m.gw;
+    if(o.qtyAuto&&o.unit===m.unit)m.qtyAuto=true;e.mats[sw.i]=m;UI.swap=null;toast('Artikel ersetzt – Menge übernommen',2000);return true}
+  UI.swap=null;pushMat(e,m);return false}
 function focusLastQty(){const q=document.querySelectorAll('[data-mq]');let last=null,mx=-1;q.forEach(el=>{if(+el.dataset.mq>mx){mx=+el.dataset.mq;last=el}});if(last)last.focus()}
 const ACT={
   tab:id=>{UI.tab=id;UI.add=false;UI.draw=null;render()},
@@ -1783,9 +1792,9 @@ const ACT={
     if(!confirm(`${esc(entLabel(p,e))} mit ${e.photoIds.length} Foto(s) löschen?`))return;
     p.entries=p.entries.filter(x=>x.id!==e.id);UI.entry=null;await dbPut('pins',p);for(const id of e.photoIds)await delBlobIfUnused(id);renderPlan()},
   addMat:async(code,a)=>{const k=KATMAP.get(code),p=pinById(UI.pin),e=curEntry(p);if(!k||!e)return;const g=(a&&a.dataset.gw)||'Holzbau';
-    pushMat(e,{gw:g,code:k[0],name:k[1],unit:k[2],price:k[3],qty:'',src:'Regiepreisliste'});UI.gwOpen.add(g);await dbPut('pins',p);renderPinPanel();focusLastQty()},
+    const sw=putMat(e,{gw:g,code:k[0],name:k[1],unit:k[2],price:k[3],qty:'',src:'Regiepreisliste'});UI.gwOpen.add(g);touch('pins',p.id);await dbPut('pins',p);renderPinPanel();if(!sw)focusLastQty()},
   addArt:async(id,a)=>{const x=S.articles.find(z=>z.id===id),p=pinById(UI.pin),e=curEntry(p);if(!x||!e)return;const g=(a&&a.dataset.gw)||x.gw;
-    pushMat(e,{gw:g,code:x.code||'',name:x.name,unit:x.unit,price:x.price,qty:'',src:x.supplier||'',url:x.url||'',artId:x.id});UI.gwOpen.add(g);await dbPut('pins',p);renderPinPanel();focusLastQty()},
+    const sw=putMat(e,{gw:g,code:x.code||'',name:x.name,unit:x.unit,price:x.price,qty:'',src:x.supplier||'',url:x.url||'',artId:x.id});UI.gwOpen.add(g);touch('pins',p.id);await dbPut('pins',p);renderPinPanel();if(!sw)focusLastQty()},
   newArt:(id,a)=>{const g=a.dataset.gw;const q=a.closest('.mats').querySelector('[data-katq]');UI.naName=q?q.value.trim():'';UI.newArt=g;UI.gwOpen.add(g);renderPinPanel();const f=$('#na-url');if(f)f.focus()},
   naCancel:()=>{UI.newArt=null;renderPinPanel()},
   naSave:async(id,a)=>{const g=a.dataset.gw,p=pinById(UI.pin),e=curEntry(p);if(!e)return;const v=x=>($('#na-'+x)||{}).value||'';
@@ -1806,6 +1815,11 @@ const ACT={
   closePin:()=>{UI.pin=null;renderPlan()},
   zoomImg:id=>showImg(id),
   closeLb:()=>{$('#lb').hidden=true},
+  swapMat:(id,a)=>{const p=pinById(UI.pin),e=curEntry(p);if(!e)return;const i=+id,m=e.mats[i];if(!m)return;
+    if(swapOn(e,i)){UI.swap=null;renderPinPanel();return}
+    UI.swap={e:e.id,i,q:(m.name||'').split(/[\s,]+/).slice(0,2).join(' ')};UI.gwOpen.add(a.dataset.gw);renderPinPanel();
+    const q=document.querySelector('[data-swq]');if(q){q.focus();q.select()}},
+  swapX:()=>{UI.swap=null;renderPinPanel()},
   katReset:async code=>{const ov=S.project.katOv||{};if(!ov[code])return;const o=KAT0.get(code);if(!confirm(`Original wiederherstellen?\n${o[1]} · ${o[2]} · ${o[3]==null?'–':'CHF '+chf(o[3])}`))return;
     delete ov[code];await dbPut('kv',S.project);applyKatOv();await katSyncMats(code);katRowUpd(code)},
   rotL:()=>rotLb(-1),rotR:()=>rotLb(1),bvRotL:()=>rotBv(-1),bvRotR:()=>rotBv(1),
@@ -2051,6 +2065,7 @@ document.addEventListener('input',e=>{const t=e.target;
   if(t.dataset.bfl!==undefined&&t.tagName==='INPUT'){UI.bfl[t.dataset.bfl]=t.value;clearTimeout(bflT);bflT=setTimeout(()=>{const k=t.dataset.bfl,pos=t.selectionStart;renderBelege();
       const n=document.querySelector(`[data-bfl="${k}"]`);if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(_){}}},300);return}
   if(t.dataset.mn!==undefined){const p=pinById(UI.pin),en=curEntry(p);if(!en)return;touch('pins',p.id);const m=en.mats[+t.dataset.mn];if(!m)return;m.note=t.value;clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);return}
+  if(t.dataset.swq!==undefined&&UI.swap)UI.swap.q=t.value;
   if(t.dataset.katq!==undefined){const r=t.nextElementSibling;if(r)r.innerHTML=katSearch(t.value,t.dataset.gw||'Holzbau');return}
   if(t.id==='na-url'){const n=$('#na-name');if(n&&!n.value.trim()){const seg=decodeURIComponent((t.value.split('?')[0].replace(/\/+$/,'').split('/').pop()||'')).replace(/\.html?$/,'');
       if(seg){const parts=seg.split('--');let nm=parts[0].replace(/[-_]+/g,' ').trim();nm=nm.charAt(0).toUpperCase()+nm.slice(1);n.value=nm;const c=$('#na-code');if(c&&parts[1]&&!c.value)c.value=parts[1].toUpperCase()}}return}
@@ -2058,7 +2073,7 @@ document.addEventListener('input',e=>{const t=e.target;
   if(!t.dataset.f)return;const p=pinById(UI.pin);if(!p)return;touch('pins',p.id);p[t.dataset.f]=t.value;
   clearTimeout(saveTimers[p.id]);saveTimers[p.id]=setTimeout(()=>dbPut('pins',p),400);
   if(t.dataset.f==='title'){const el=document.querySelector(`.pin[data-pin="${p.id}"]`);if(el)el.title=t.value}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#lb').hidden)$('#lb').hidden=true;else if(!$('#bview').hidden&&UI.tab==='belege'&&!UI.wsel.size)ACT.bvClose();else if(UI.tab==='arbeit'&&UI.wsel.size){UI.wsel.clear();UI.wlast=null;renderArbeit()}else if(UI.draw){UI.draw=null;renderPlan()}else if(UI.mvPin){ACT.mvCancel()}else if(UI.add){UI.add=false;renderStage()}}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#lb').hidden)$('#lb').hidden=true;else if(UI.swap){UI.swap=null;renderPinPanel()}else if(!$('#bview').hidden&&UI.tab==='belege'&&!UI.wsel.size)ACT.bvClose();else if(UI.tab==='arbeit'&&UI.wsel.size){UI.wsel.clear();UI.wlast=null;renderArbeit()}else if(UI.draw){UI.draw=null;renderPlan()}else if(UI.mvPin){ACT.mvCancel()}else if(UI.add){UI.add=false;renderStage()}}});
 window.addEventListener('beforeunload',()=>{for(const id in saveTimers){clearTimeout(saveTimers[id]);const p=pinById(id);if(p)dbPut('pins',p)}});
 
 /* Pins setzen und verschieben */
