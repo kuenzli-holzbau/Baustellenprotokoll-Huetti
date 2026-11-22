@@ -478,6 +478,7 @@ select.bst option{font-weight:600}
   .roomh small{font-size:10pt;color:#666;font-weight:400}
   .rcrop{position:relative;overflow:hidden;margin:2mm auto 1mm;border:.3pt solid #999;break-inside:avoid;page-break-inside:avoid}
   .rcin{position:absolute}
+  .rmask path{fill:#eef0f2;fill-opacity:.88;stroke:none}
   #print .pleg{justify-content:center}
   tr.bip td{font-size:8pt;color:#444;padding-top:0!important;padding-bottom:0!important;border-bottom:0!important}
   tbody.bg{break-inside:avoid;page-break-inside:avoid}
@@ -610,7 +611,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='65 (22.11.2026, Masse mit Einheit)';
+const APP_VERSION='66 (22.11.2026, Zimmer-Ausschnitt)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -700,7 +701,7 @@ function roomCropHtml(f,r,pins){if(!r.area||r.area.length<3)return '';const b=bl
   const mx=Math.max((x2-x1)*.08,.015),my=Math.max((y2-y1)*.08,.015*W/H);x1=Math.max(0,x1-mx);x2=Math.min(1,x2+mx);y1=Math.max(0,y1-my);y2=Math.min(1,y2+my);
   const bw=x2-x1,bh=y2-y1,A=(bw*W)/(bh*H),wmm=Math.min(184,105*A);
   return `<div class="rcrop" style="width:${wmm.toFixed(1)}mm;aspect-ratio:${A.toFixed(4)}"><div class="rcin" style="width:${100/bw}%;height:${100/bh}%;left:${-x1/bw*100}%;top:${-y1/bh*100}%">
-    <img src="${urlOf(f.planId)}" alt="">${areasHtml(f)}<svg class="areas rsel" viewBox="0 0 1000 1000" preserveAspectRatio="none"><polygon points="${ptsStr(r.area)}"/></svg>
+    <img src="${urlOf(f.planId)}" alt="">${areasHtml(f)}<svg class="areas rmask" viewBox="0 0 1000 1000" preserveAspectRatio="none"><path fill-rule="evenodd" d="M0,0 1000,0 1000,1000 0,1000Z M${ptsStr(r.area)}Z"/></svg><svg class="areas rsel" viewBox="0 0 1000 1000" preserveAspectRatio="none"><polygon points="${ptsStr(r.area)}"/></svg>
     ${pins.map(p=>`<span class="pin ${pinState(p)}" style="left:${p.x*100}%;top:${p.y*100}%">${p.nr}${pinLbl(p)}</span>`).join('')}</div></div>${pinLegend()}`}
 function areasHtml(f){if(!isSite(f)){const rs=roomsOf(f).filter(r=>r.area&&r.area.length>2);if(!rs.length)return '';
     return `<svg class="areas rooms" viewBox="0 0 1000 1000" preserveAspectRatio="none">${rs.map(r=>`<polygon points="${ptsStr(r.area)}"/>`).join('')}</svg>`+
