@@ -611,7 +611,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='66 (22.11.2026, Zimmer-Ausschnitt)';
+const APP_VERSION='67 (22.11.2026, leere Einträge)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -2175,15 +2175,15 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
     if(o.entries)for(const grp of pinGroups(f,pins)){if(!grp.pins.length)continue;const hasRooms=roomsOf(f).length>0;let rb=0,rm=0;
     if(hasRooms)h+=`<h2 class="roomh">${grp.room?'▭ '+esc(grp.room.name):'Ohne Zimmer'} <small>· ${esc(floorLabel(f))} · ${grp.pins.length} Pin(s)</small></h2>`;
     if(hasRooms&&grp.room&&o.plans&&f.planId)h+=roomCropHtml(f,grp.room,grp.pins);
-    for(const p of grp.pins){const es=entriesOf(p).filter(eOk);
+    for(const p of grp.pins){const es=entriesOf(p).filter(eOk).filter(e=>e.photoIds.length||e.note||e.material||dimTxt(e)||GEWERKE.some(g=>e.gwText[g]||matsOf(e,g).length));
       const pb=belegeByNr().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||gwShare(b,p.id,G)));
       const bSum=pb.reduce((x,b)=>x+gwShare(b,p.id,G),0),mSum=matTotal(es.flatMap(e=>e.mats));rb+=bSum;rm+=mSum;
       h+=`<section class="pinsec"><h2 class="pinh"><span class="enr" style="display:inline-flex;margin-right:2mm;vertical-align:middle">${p.nr}</span>${esc(p.title||'Ohne Titel')} <span style="font-weight:400;color:#666;font-size:11pt">· ${esc(floorLabel(f))}${grp.room?' · '+esc(grp.room.name):''}${p.surf?' · Oberfläche '+esc(p.surf):''}</span></h2>
-      <h3 class="ph">Dokumentation</h3>
+      ${es.length?'<h3 class="ph">Dokumentation</h3>':''}
       ${es.map(e=>`<div class="ent-p"><div class="edt">${esc(entLabel(p,e))}${entDateSfx(e)}${entTags(e).length?` <span style="font-weight:400;color:#555">· ${entTags(e).join(', ')}</span>`:''}</div>
         ${dimTxt(e)?`<p><i>Fläche:</i> ${dimTxt(e)}</p>${isShaped(e)?`<div class="wskp">${shapeSvg(e,200,120)}</div>`:''}`:''}${e.note?`<p>${nl2br(e.note)}</p>`:''}${e.material?`<p><i>Material:</i> ${nl2br(e.material)}</p>`:''}
         ${GEWERKE.map(g=>{const t=e.gwText[g]||'',ms=matsOf(e,g).map(x=>x[0]);if(!t&&!ms.length)return '';return ms.length?`<div class="matb">${t?`<p><b>${g}:</b> ${nl2br(t)}</p>`:`<p><b>${g}-Material:</b></p>`}${matTable(ms)}</div>`:`<p><b>${g}:</b> ${nl2br(t)}</p>`}).join('')}
-        ${e.photoIds.length?`<div class="eph">${e.photoIds.map((id,i)=>`<div class="ephi"><img src="${urlOf(id)}" alt=""><span>${i+1}</span></div>`).join('')}</div>`:''}</div>`).join('')||'<p style="color:#666">Keine Einträge.</p>'}
+        ${e.photoIds.length?`<div class="eph">${e.photoIds.map((id,i)=>`<div class="ephi"><img src="${urlOf(id)}" alt=""><span>${i+1}</span></div>`).join('')}</div>`:''}</div>`).join('')}
       <div class="pbel"><h3 class="ph">Belege</h3>
       ${pb.length?`<table class="mt"><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Gewerk</th><th class="r">Beleg CHF</th><th class="r">Anteil Pin CHF</th></tr></thead>
         ${pb.map(b=>{const n=belegShares(b).size,ir=pdfItemRows(b,p.id,G);return `<tbody class="bg${ir?' bgi':''}"><tr class="bh"><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.gewerk||'')}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td><td class="r">${chf(gwShare(b,p.id,G))}${n>1?`<br><small style="color:#666">${splitModeTxt(b)} (${n} Pins)</small>`:''}</td></tr>${ir}</tbody>`}).join('')}
