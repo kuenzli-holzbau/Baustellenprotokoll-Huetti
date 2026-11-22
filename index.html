@@ -610,7 +610,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='64 (22.11.2026, Dokumentation)';
+const APP_VERSION='65 (22.11.2026, Masse mit Einheit)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -749,7 +749,7 @@ function shapeSvg(e,W,H){const P=shapePts(e);if(!P)return '';const mh=Math.max(.
   X=x=>pad+x*sc,Y=y=>H-pad-y*sc,pts=[[0,0],...P,[e.dimW,0]].map(([x,y])=>X(x).toFixed(1)+','+Y(y).toFixed(1)).join(' ');
   const lab=(x,y,t,a)=>`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${a||'middle'}">${t}</text>`;
   return `<svg class="wsk" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><polygon points="${pts}"/>${(e.open||[]).length?'':''}
-    ${lab(X(e.dimW/2),H-2,qfmt(e.dimW))}${P.map(([x,y],i)=>lab(X(x)+(i===0?3:i===P.length-1?-3:0),Y(y)-3,qfmt(y),i===0?'start':i===P.length-1?'end':'middle')).join('')}
+    ${lab(X(e.dimW/2),H-2,qfmt(e.dimW)+' m')}${P.map(([x,y],i)=>lab(X(x)+(i===0?3:i===P.length-1?-3:0),Y(y)-3,qfmt(y)+' m',i===0?'start':i===P.length-1?'end':'middle')).join('')}
     ${knicksOk(e).map(k=>`<line x1="${X(k.x)}" y1="${Y(0)}" x2="${X(k.x)}" y2="${Y(k.h)}" class="kl"/>`).join('')}</svg>`}
 const abzM2=e=>r2((e.open||[]).reduce((s,o)=>s+openM2(o),0));
 const entM2=e=>grossM2(e)?Math.max(0,r2(grossM2(e)-abzM2(e))):'';
