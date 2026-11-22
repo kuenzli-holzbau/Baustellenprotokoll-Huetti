@@ -501,9 +501,12 @@ select.bst option{font-weight:600}
   .enr{flex:none;width:7mm;height:7mm;border-radius:50%;background:#c2410c;color:#fff;font-weight:700;font-size:9pt;display:flex;align-items:center;justify-content:center}
   .ed{margin-left:auto;color:#666}
   .entry p{margin:1mm 0 2mm}
-  .pinsec{break-inside:avoid;page-break-inside:avoid;margin-top:5mm;padding-top:0}
+  .pinsec{margin-top:9mm;padding-top:3mm;border-top:1.2pt solid #c2410c}
+  .roomh+.rcrop+.pinsec,.roomh+.pinsec{margin-top:4mm;border-top:0;padding-top:0}
   .pinsec h2,.pinsec .ph,.ent-p .edt{break-after:avoid;page-break-after:avoid}
-  .pbel{break-inside:avoid;page-break-inside:avoid;border-left:1.2mm solid #2563eb;padding-left:3mm;margin-top:9mm}
+  .pbel{border-left:1.2mm solid #2563eb;padding-left:3mm;margin-top:5mm}
+  .pbel>h3.ph{break-after:avoid;page-break-after:avoid}
+  .ptot{break-inside:avoid;break-before:avoid}
   .pbel>h3.ph{color:#1d4ed8;border-bottom-color:#93c5fd}
   .pbel table.mt thead th{background:#dbeafe!important;color:#1e3a8a}
   .matb{border-left:1.2mm solid #92400e;padding-left:3mm;margin:1.5mm 0}
@@ -516,13 +519,16 @@ select.bst option{font-weight:600}
   .ph{font-size:10.5pt;margin:3mm 0 1.5mm;border-bottom:.5pt solid #ccc;padding-bottom:.8mm}
   .ptot{margin-top:2.5mm;padding:2mm 3mm;background:#f6f3ee;border-left:1.2mm solid #c2410c;font-weight:700}
   .ent-p p{margin:.6mm 0 1.2mm}
-  .ent-p{margin:1mm 0 3mm 6mm;border-left:.8pt solid #ddd;padding-left:3mm;break-inside:avoid;page-break-inside:avoid}
+  .ent-p{margin:1mm 0 3mm 6mm;border-left:.8pt solid #ddd;padding-left:3mm}
+  .ent-p>p,.wskp,.matb>p{break-inside:avoid;break-after:avoid}
   .ent-p .edt{font-weight:700;color:#c2410c;margin-bottom:1mm}
   .mt{width:100%;border-collapse:collapse;font-size:9pt;margin:1mm 0 2mm}
   .mt th,.mt td{border-bottom:.3pt solid #ccc;padding:1mm 1.5mm;text-align:left;vertical-align:top}
   .mt .r{text-align:right;white-space:nowrap}
   .mt .tot td{font-weight:700;border-top:.8pt solid #333;border-bottom:0}
   .msum{break-before:page}
+  .msum+.msum{break-before:auto;margin-top:12mm}
+  .msum h2{break-after:avoid}
   .eph{display:grid;grid-template-columns:repeat(4,1fr);gap:2mm;margin-top:2mm}
   .eph img{width:100%;height:34mm;object-fit:cover;background:#f3f3f3;border-radius:1mm;break-inside:avoid;display:block}
   .ephi{position:relative;break-inside:avoid}
@@ -611,7 +617,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='69 (22.11.2026, Kontroll-PDF ohne Rand)';
+const APP_VERSION='70 (22.11.2026, PDF kompakter)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
