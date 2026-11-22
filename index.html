@@ -610,7 +610,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='63 (22.11.2026, Artikel ersetzen)';
+const APP_VERSION='64 (22.11.2026, Dokumentation)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1192,7 +1192,7 @@ function entryEditor(p,e){const noPh=entKind(e)==='km';
     <small class="mut">m oder mm · schräg: zweite Höhe · Giebel: «+ Knick» (Abstand von links + Höhe) · m²-Material übernimmt die Fläche, «2x» in der Material-Beschreibung verdoppelt.</small></div>`:''}
   <div class="lbl">Gewerke (antippen)</div>
   <div class="tags">${GEWERKE.map(g=>`<button class="tagb ${(e.tags||[]).includes(g)?'on':''}" style="--c:${GWC[g]}" data-act="togTag" data-id="${g}">${g}</button>`).join('')}</div>
-  <label>Bemerkungen / Fortschritt<textarea data-ef="note" rows="4" placeholder="Was wurde gemacht, Stand, Besonderheiten …">${esc(e.note)}</textarea></label>
+  <label>Bemerkungen<textarea data-ef="note" rows="4" placeholder="Was wurde gemacht, Stand, Besonderheiten …">${esc(e.note)}</textarea></label>
   ${noPh&&!e.photoIds.length?'':`<div class="lbl fhd">Fotos ${e.photoIds.length?(UI.psel?`<span class="fsel"><button class="b sm" data-act="pselAll">Alle</button><button class="b sm" data-act="pselOff">Abbrechen</button><button class="b sm p" data-act="pselMove" ${UI.psel.size?'':'disabled'}>↗ Verschieben (${UI.psel.size})</button></span>`:`<button class="b sm" data-act="pselOn" title="Fotos auswählen, um sie in einen anderen Pin zu verschieben">☑ Auswählen</button>`):''}</div>
   <div class="thumbs">${e.photoIds.map((id,i,a)=>`<div class="th ${UI.psel?(UI.psel.has(id)?'sel':'selm'):''}"><img src="${urlOf(id)}" alt="" data-act="${UI.psel?'pselTog':'zoomImg'}" data-id="${id}">${UI.psel?`<span class="thck">${UI.psel.has(id)?'✓':''}</span>`:''}<span class="thn">${i+1}</span><button data-act="rmPhoto" data-id="${id}" title="Foto entfernen">×</button>
       ${a.length>1?`<span class="thm"><button data-act="movPhoto" data-id="${id}" data-dir="-1" ${i?'':'disabled'} title="Nach vorne">◀</button><button data-act="movPhoto" data-id="${id}" data-dir="1" ${i<a.length-1?'':'disabled'} title="Nach hinten">▶</button></span>`:''}</div>`).join('')}${noPh?'':`<label class="th add cam" title="Foto aufnehmen">📷<input type="file" accept="image/*" capture="environment" hidden data-up="pinPhotos"></label><label class="th add" title="Fotos aus der Galerie">＋<input type="file" accept="image/*" multiple hidden data-up="pinPhotos"></label>`}</div>${noPh?'<p class="mut" style="font-size:12px">Material-Einträge haben keine Fotos – bitte auswählen und in den Bilder-Eintrag verschieben.</p>':'<p class="drophint">… oder Fotos hierher ziehen</p>'}`}
@@ -1558,7 +1558,7 @@ function renderExport(){
    <label>Zeitraum<input data-pf="period" value="${esc(P.period)}" placeholder="z.B. 2021 – 2025"></label>
    <div class="opts">
     <label class="ck"><input type="checkbox" data-opt="plans" ${o.plans?'checked':''}> Grundrisse mit Zimmern, pro Zimmer Ausschnitt mit Pins</label>
-    <label class="ck"><input type="checkbox" data-opt="entries" ${o.entries?'checked':''}> Pro Pin: Fortschritte, Fotos und Belege (mit Aufteilung)</label>
+    <label class="ck"><input type="checkbox" data-opt="entries" ${o.entries?'checked':''}> Pro Pin: Dokumentation, Fotos und Belege (mit Aufteilung)</label>
     <label class="ck"><input type="checkbox" data-opt="mats" ${o.mats?'checked':''}> Materialbezug pro Gewerk mit Kosten</label>
     ${APP.work?`<label class="ck"><input type="checkbox" data-opt="work" ${o.work?'checked':''}> Arbeitszeit als Nachweis (nicht im Gesamtbetrag)</label>`:''}
     <label class="ck"><input type="checkbox" data-opt="list" ${o.list?'checked':''}> Belegliste mit Totalen pro Kategorie</label>
@@ -2178,7 +2178,7 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
       const pb=belegeByNr().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||gwShare(b,p.id,G)));
       const bSum=pb.reduce((x,b)=>x+gwShare(b,p.id,G),0),mSum=matTotal(es.flatMap(e=>e.mats));rb+=bSum;rm+=mSum;
       h+=`<section class="pinsec"><h2 class="pinh"><span class="enr" style="display:inline-flex;margin-right:2mm;vertical-align:middle">${p.nr}</span>${esc(p.title||'Ohne Titel')} <span style="font-weight:400;color:#666;font-size:11pt">· ${esc(floorLabel(f))}${grp.room?' · '+esc(grp.room.name):''}${p.surf?' · Oberfläche '+esc(p.surf):''}</span></h2>
-      <h3 class="ph">Fortschritte</h3>
+      <h3 class="ph">Dokumentation</h3>
       ${es.map(e=>`<div class="ent-p"><div class="edt">${esc(entLabel(p,e))}${entDateSfx(e)}${entTags(e).length?` <span style="font-weight:400;color:#555">· ${entTags(e).join(', ')}</span>`:''}</div>
         ${dimTxt(e)?`<p><i>Fläche:</i> ${dimTxt(e)}</p>${isShaped(e)?`<div class="wskp">${shapeSvg(e,200,120)}</div>`:''}`:''}${e.note?`<p>${nl2br(e.note)}</p>`:''}${e.material?`<p><i>Material:</i> ${nl2br(e.material)}</p>`:''}
         ${GEWERKE.map(g=>{const t=e.gwText[g]||'',ms=matsOf(e,g).map(x=>x[0]);if(!t&&!ms.length)return '';return ms.length?`<div class="matb">${t?`<p><b>${g}:</b> ${nl2br(t)}</p>`:`<p><b>${g}-Material:</b></p>`}${matTable(ms)}</div>`:`<p><b>${g}:</b> ${nl2br(t)}</p>`}).join('')}
