@@ -611,7 +611,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='68 (22.11.2026, Abstand Belege)';
+const APP_VERSION='69 (22.11.2026, Kontroll-PDF ohne Rand)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1566,7 +1566,7 @@ function renderExport(){
     <label class="ck"><input type="checkbox" data-opt="att" ${o.att?'checked':''}> Belege als Anhang (eine Seite pro Beleg)</label>
     <label style="margin-top:10px">Nur ein Gewerk (Auszug, z.B. für den Sanitär)<select data-ch="pgw"><option value="">Alle Gewerke</option>${GEWERKE.map(g=>`<option ${o.gw===g?'selected':''}>${g}</option>`).join('')}</select></label></div>
    <button class="b p big" data-act="print">📄 PDF erstellen</button>
-   <button class="b big" data-act="printCtrl" title="Gleicher Inhalt mit breitem Notizrand rechts – zum Markieren und Kommentieren im PDF-Programm">📝 Kontroll-PDF</button>
+   <button class="b big" data-act="printCtrl" title="Gleicher Inhalt mit etwas mehr Zeilenabstand – zum Markieren und Kommentieren im PDF-Programm">📝 Kontroll-PDF</button>
    <p class="mut">Im Druckfenster als Ziel «Als PDF sichern» wählen und bei «Weitere Einstellungen» die <b>Hintergrundgrafiken</b> einschalten, damit die Pins farbig erscheinen.</p></div>
    ${cloudOn()?`<div class="card"><h2>Cloud &amp; Konto</h2>
    <p>${SES?`Angemeldet als <b>${esc(SES.email)}</b>`:'Nicht angemeldet'}</p>
@@ -2243,10 +2243,10 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
       pages.forEach((u,i)=>{h+=`<section class="att"><h3>${head}${pages.length>1?` <span style="font-weight:400;color:#666">(Seite ${i+1} von ${pages.length})</span>`:''}</h3><img src="${u}" alt=""></section>`});
       if(pages.missing)h+=`<p style="color:#b91c1c">B-${pad(b.nr)}: Seiten 2–${pages.missing} sind auf diesem Gerät noch nicht geladen – bitte zuerst synchronisieren.</p>`}
     window._attUrls=tmpUrls}
-  if(UI.ctrl)h=`<div class="ctrlbar">KONTROLL-EXEMPLAR · Stand ${fmtDate(today())} · Notizen bitte im Rand rechts</div>`+h;
+  if(UI.ctrl)h=`<div class="ctrlbar">KONTROLL-EXEMPLAR · Stand ${fmtDate(today())}</div>`+h;
   const pr=$('#print');pr.innerHTML=h;pr.classList.toggle('ctrl',!!UI.ctrl);
   let cs=$('#ctrlPage');if(!cs){cs=document.createElement('style');cs.id='ctrlPage';document.head.appendChild(cs)}
-  cs.textContent=UI.ctrl?'@media print{@page{size:A4;margin:12mm 62mm 14mm 12mm}}':'';
+  cs.textContent='';
   await Promise.all([...pr.querySelectorAll('img')].map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r})));
   $('#toast').hidden=true;const old=document.title;document.title=P.name||'Baustellenprotokoll';
   if(UI.ctrl)document.title=(P.name||'Baustellenprotokoll')+' – Kontroll-Exemplar';
