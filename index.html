@@ -440,6 +440,10 @@ select.bst option{font-weight:600}
   #print{display:block;font-size:10.5pt;color:#111}
   #print *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .pg,.att,.blist{break-before:page}
+  #print.ctrl{font-size:10pt}
+  #print.ctrl .ctrlbar{font-size:8pt;color:#b45309;border:1pt solid #f59e0b;border-radius:4px;padding:1.5mm 3mm;margin-bottom:4mm;letter-spacing:.3pt}
+  #print.ctrl td,#print.ctrl th{padding-top:1.6mm;padding-bottom:1.6mm}
+  #print.ctrl img{max-width:100%}
   .qr{break-after:page;font-size:9.5pt}.qr:last-child{break-after:auto}
   .qrh{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6mm}.qrh img{height:14mm}
   .qrh .qt{text-align:right}.qrh .qt b{display:block;font-size:16pt}.qrh .qt span{color:#555}
@@ -583,7 +587,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='59 (22.11.2026, Beleg-Fenster)';
+const APP_VERSION='60 (22.11.2026, Kontroll-PDF)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1525,6 +1529,7 @@ function renderExport(){
     <label class="ck"><input type="checkbox" data-opt="att" ${o.att?'checked':''}> Belege als Anhang (eine Seite pro Beleg)</label>
     <label style="margin-top:10px">Nur ein Gewerk (Auszug, z.B. für den Sanitär)<select data-ch="pgw"><option value="">Alle Gewerke</option>${GEWERKE.map(g=>`<option ${o.gw===g?'selected':''}>${g}</option>`).join('')}</select></label></div>
    <button class="b p big" data-act="print">📄 PDF erstellen</button>
+   <button class="b big" data-act="printCtrl" title="Gleicher Inhalt mit breitem Notizrand rechts – zum Markieren und Kommentieren im PDF-Programm">📝 Kontroll-PDF</button>
    <p class="mut">Im Druckfenster als Ziel «Als PDF sichern» wählen und bei «Weitere Einstellungen» die <b>Hintergrundgrafiken</b> einschalten, damit die Pins farbig erscheinen.</p></div>
    ${cloudOn()?`<div class="card"><h2>Cloud &amp; Konto</h2>
    <p>${SES?`Angemeldet als <b>${esc(SES.email)}</b>`:'Nicht angemeldet'}</p>
@@ -1834,7 +1839,8 @@ const ACT={
     for(const p of S.pins.filter(p=>pinBelegIds(p).includes(id))){for(const e of p.entries){e.belegIds=e.belegIds.filter(x=>x!==id);delete e.belegGw[id]}await dbPut('pins',p)}
     await delBlobIfUnused(b.fileId);await delBlobIfUnused(b.previewId);renderBelege()},
   readBeleg:async(id,a)=>{const b=belegById(id);if(!b)return;a.disabled=true;b.auto=Object.assign(b.auto||{},{amount:b.amount===''||b.amount==null||(b.auto&&b.auto.amount)});await recognizeBeleg(b);renderBelege()},
-  print:()=>doPrint(),
+  print:()=>{UI.ctrl=false;doPrint()},
+  printCtrl:()=>{UI.ctrl=true;doPrint()},
   syncNow:()=>syncNow(true),
   logout:()=>logout(),
   backup:()=>doBackup(),
@@ -2166,9 +2172,13 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
       pages.forEach((u,i)=>{h+=`<section class="att"><h3>${head}${pages.length>1?` <span style="font-weight:400;color:#666">(Seite ${i+1} von ${pages.length})</span>`:''}</h3><img src="${u}" alt=""></section>`});
       if(pages.missing)h+=`<p style="color:#b91c1c">B-${pad(b.nr)}: Seiten 2–${pages.missing} sind auf diesem Gerät noch nicht geladen – bitte zuerst synchronisieren.</p>`}
     window._attUrls=tmpUrls}
-  const pr=$('#print');pr.innerHTML=h;
+  if(UI.ctrl)h=`<div class="ctrlbar">KONTROLL-EXEMPLAR · Stand ${fmtDate(today())} · Notizen bitte im Rand rechts</div>`+h;
+  const pr=$('#print');pr.innerHTML=h;pr.classList.toggle('ctrl',!!UI.ctrl);
+  let cs=$('#ctrlPage');if(!cs){cs=document.createElement('style');cs.id='ctrlPage';document.head.appendChild(cs)}
+  cs.textContent=UI.ctrl?'@media print{@page{size:A4;margin:12mm 62mm 14mm 12mm}}':'';
   await Promise.all([...pr.querySelectorAll('img')].map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r})));
   $('#toast').hidden=true;const old=document.title;document.title=P.name||'Baustellenprotokoll';
+  if(UI.ctrl)document.title=(P.name||'Baustellenprotokoll')+' – Kontroll-Exemplar';
   setTimeout(()=>{window.print();document.title=old},150);
 }
 
