@@ -180,7 +180,10 @@ table.bt{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;
 .err{color:#b91c1c;font-size:13px;min-height:18px}
 /* Lightbox / Toast */
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:100;cursor:zoom-out}
-#lb img{max-width:94vw;max-height:94vh;box-shadow:0 4px 30px rgba(0,0,0,.5)}
+#lb img{max-width:94vw;max-height:88vh;box-shadow:0 4px 30px rgba(0,0,0,.5)}
+#lb .lbt{position:fixed;top:12px;right:12px;display:flex;gap:8px}
+#lb .lbt button,#bview .bvh .rot{font-size:20px;line-height:1;min-width:44px;min-height:44px;border-radius:10px;border:0;background:rgba(255,255,255,.92);cursor:pointer}
+#bview .bvh .rot{font-size:16px;min-width:34px;min-height:30px;background:#fff;border:1px solid #d0d7de}
 /* Beleg-Fenster: verschiebbar, Grösse änderbar, zeigt den angewählten Beleg */
 #bview{position:fixed;z-index:90;background:#fff;border:1px solid #c9ced6;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.28);display:flex;flex-direction:column;resize:both;overflow:hidden;min-width:280px;min-height:240px}
 #bview[hidden]{display:none}
@@ -434,7 +437,7 @@ select.bst option{font-weight:600}
 /* Druck / PDF */
 #print{display:none}
 @media print{
-  @page{size:A4;margin:14mm 13mm 16mm}
+  @page{size:A4;margin:14mm 13mm 16mm;@bottom-right{content:"Seite " counter(page) " / " counter(pages);font:8pt system-ui,sans-serif;color:#666}}
   html,body{background:#fff}
   body>*:not(#print){display:none!important}
   #print{display:block;font-size:10.5pt;color:#111}
@@ -470,6 +473,11 @@ select.bst option{font-weight:600}
   .rcin{position:absolute}
   #print .pleg{justify-content:center}
   tr.bip td{font-size:8pt;color:#444;padding-top:0!important;padding-bottom:0!important;border-bottom:0!important}
+  tbody.bg{break-inside:avoid;page-break-inside:avoid}
+  tbody.bg td{border-bottom:0!important}
+  tbody.bg tr:last-child td{border-bottom:.6pt solid #888!important;padding-bottom:1.6mm!important}
+  tbody.bgi tr.bh td{font-weight:600;padding-bottom:.6mm!important}
+  tbody.bg tr.bip td:nth-child(2){border-left:1.2pt solid #c7ccd1;padding-left:2.5mm}
   .wskp{margin:1mm 0 2mm}.wskp svg{width:50mm;height:30mm}
   .rcin>img{position:absolute;inset:0;width:100%;height:100%;display:block}
   .rcin .rlabel{font-size:7pt;padding:0 1mm;background:rgba(255,255,255,.8)}
@@ -487,7 +495,15 @@ select.bst option{font-weight:600}
   .entry p{margin:1mm 0 2mm}
   .pinsec{break-inside:avoid;page-break-inside:avoid;margin-top:5mm;padding-top:0}
   .pinsec h2,.pinsec .ph,.ent-p .edt{break-after:avoid;page-break-after:avoid}
-  .pbel{break-inside:avoid;page-break-inside:avoid}
+  .pbel{break-inside:avoid;page-break-inside:avoid;border-left:1.2mm solid #2563eb;padding-left:3mm;margin-top:3mm}
+  .pbel>h3.ph{color:#1d4ed8;border-bottom-color:#93c5fd}
+  .pbel table.mt thead th{background:#dbeafe!important;color:#1e3a8a}
+  .matb{border-left:1.2mm solid #92400e;padding-left:3mm;margin:1.5mm 0}
+  .matb>p:first-child{color:#92400e}
+  .matb table.mt thead th{background:#f3e8dc!important;color:#78350f}
+  .cb{color:#1d4ed8}.cm{color:#92400e}
+  th.cb{background:#dbeafe!important;color:#1e3a8a!important}th.cm{background:#f3e8dc!important;color:#78350f!important}
+  .cleg{font-size:8pt;color:#444;margin:1mm 0 2mm}.cleg i{display:inline-block;width:3mm;height:3mm;vertical-align:-.4mm;margin:0 1mm 0 3mm}
   .mt tr{break-inside:avoid;page-break-inside:avoid}
   .ph{font-size:10.5pt;margin:3mm 0 1.5mm;border-bottom:.5pt solid #ccc;padding-bottom:.8mm}
   .ptot{margin-top:2.5mm;padding:2mm 3mm;background:#f6f3ee;border-left:1.2mm solid #c2410c;font-weight:700}
@@ -548,8 +564,8 @@ select.bst option{font-weight:600}
 <main id="v-arbeit" class="view" hidden></main>
 
 <input type="file" id="planInput" accept="image/*,application/pdf" data-up="plan" hidden>
-<div id="lb" hidden data-act="closeLb"><img alt=""></div>
-<div id="bview" hidden><div class="bvh"><b id="bvTitle">Beleg</b><button data-act="bvPrev" title="Vorheriger Beleg">◀</button><button data-act="bvNext" title="Nächster Beleg">▶</button><button data-act="bvExt" title="In neuem Browser-Tab öffnen">↗</button><button data-act="bvClose" title="Schliessen (Esc)">✕</button></div><div class="bvb" id="bvBody"></div></div>
+<div id="lb" hidden data-act="closeLb"><img alt=""><div class="lbt"><button data-act="rotL" title="90° nach links drehen">⟲</button><button data-act="rotR" title="90° nach rechts drehen">⟳</button><button data-act="closeLb" title="Schliessen (Esc)">✕</button></div></div>
+<div id="bview" hidden><div class="bvh"><b id="bvTitle">Beleg</b><button data-act="bvPrev" title="Vorheriger Beleg">◀</button><button data-act="bvNext" title="Nächster Beleg">▶</button><button class="rot" data-act="bvRotL" title="Beleg 90° nach links drehen">⟲</button><button class="rot" data-act="bvRotR" title="Beleg 90° nach rechts drehen">⟳</button><button data-act="bvExt" title="In neuem Browser-Tab öffnen">↗</button><button data-act="bvClose" title="Schliessen (Esc)">✕</button></div><div class="bvb" id="bvBody"></div></div>
 <div id="toast" hidden></div>
 <div id="totDlg" hidden data-act="totClose"><div class="totbox"><div id="totBody"></div><button class="b" data-act="totClose" style="margin-top:12px;width:100%">Schliessen</button></div></div>
 <div id="login" hidden><form id="lgForm" class="card"><h2>🏗️ Baustellenprotokoll</h2><p class="mut">Bitte mit deinem Konto anmelden. <small id="lgVer"></small></p>
@@ -587,7 +603,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='60 (22.11.2026, Kontroll-PDF)';
+const APP_VERSION='61 (22.11.2026, Bilder drehen)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1598,7 +1614,22 @@ function bvStep(d){const ids=[...document.querySelectorAll('#v-belege tr[data-id
 /* Angewählter Beleg: Klick oder Feld in einer Beleg-Zeile → Fenster zeigt diesen Beleg (wenn offen) */
 document.addEventListener('focusin',e=>{const tr=e.target.closest&&e.target.closest('#v-belege tr[data-id]');if(tr)bvShow(tr.dataset.id,false)});
 document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('#bview .bvb img')){e.target.closest('.bvb').classList.toggle('zoom');return}const tr=e.target.closest&&e.target.closest('#v-belege tr[data-id]');if(tr&&!e.target.closest('[data-act="delBeleg"]'))bvShow(tr.dataset.id,false)});
-function showImg(id){const lb=$('#lb');lb.querySelector('img').src=urlOf(id);lb.hidden=false}
+function showImg(id){const lb=$('#lb');UI.lbId=id;lb.querySelector('img').src=urlOf(id);lb.hidden=false}
+/* Bild drehen: gedrehte Kopie speichern, alle Verweise (Fotos, Belege) umhängen, altes Bild entfernen → synchronisiert wie ein neues Foto */
+let rotBusy=false;
+async function rotateBlob(id,dir){if(rotBusy)return null;const r=blobMap.get(id);if(!r||!r.blob){toast('Bild ist noch nicht auf dieses Gerät geladen.');return null}
+  if(r.mime==='application/pdf'){toast('PDF-Belege können nicht gedreht werden.');return null}
+  rotBusy=true;try{const im=await loadBitmap(r.blob);const w=im.width,h=im.height;const c=document.createElement('canvas');c.width=h;c.height=w;const g=c.getContext('2d');
+    g.fillStyle='#fff';g.fillRect(0,0,h,w);g.translate(h/2,w/2);g.rotate(dir*Math.PI/2);g.drawImage(im,-w/2,-h/2);
+    const out=await new Promise(z=>c.toBlob(z,'image/jpeg',.9));if(!out)throw new Error('Drehen fehlgeschlagen');
+    const extra={w:h,h:w};if(r.pages)extra.pages=r.pages;const nr=await storeBlob(out,'image/jpeg',r.name,'',extra);
+    for(const p of S.pins){let ch=false;for(const e of p.entries){const i=e.photoIds.indexOf(id);if(i>=0){e.photoIds[i]=nr.id;ch=true}}if(ch){touch('pins',p.id);await dbPut('pins',p)}}
+    for(const b of S.belege){let ch=false;if(b.fileId===id){b.fileId=nr.id;ch=true}if(b.previewId===id){b.previewId=nr.id;ch=true}if(ch){touch('belege',b.id);await dbPut('belege',b)}}
+    await delBlobIfUnused(id);scheduleSync&&scheduleSync();return nr.id}
+  catch(e){console.warn(e);toast('Bild konnte nicht gedreht werden.');return null}finally{rotBusy=false}}
+async function rotLb(dir){const nid=await rotateBlob(UI.lbId,dir);if(!nid)return;UI.lbId=nid;$('#lb img').src=urlOf(nid);render()}
+async function rotBv(dir){const b=belegById(UI.bv);if(!b)return;if(isPdfBeleg(b))return toast('PDF-Belege können nicht gedreht werden.');
+  const nid=await rotateBlob(b.fileId||b.previewId,dir);if(!nid)return;const id=UI.bv;UI.bv=null;bvShow(id,true);if(UI.tab==='belege')renderBelege()}
 
 /* ---------- Aktionen ---------- */
 /* Pin in ein anderes Gebäude / einen anderen Grundriss verschieben: Ziel-Grundriss wählen, Position antippen */
@@ -1759,6 +1790,7 @@ const ACT={
   closePin:()=>{UI.pin=null;renderPlan()},
   zoomImg:id=>showImg(id),
   closeLb:()=>{$('#lb').hidden=true},
+  rotL:()=>rotLb(-1),rotR:()=>rotLb(1),bvRotL:()=>rotBv(-1),bvRotR:()=>rotBv(1),
   pselOn:()=>{UI.psel=new Set();renderPinPanel()},
   pselOff:()=>{UI.psel=null;renderPinPanel()},
   pselTog:id=>{if(!UI.psel)return;UI.psel.has(id)?UI.psel.delete(id):UI.psel.add(id);renderPinPanel()},
@@ -2111,20 +2143,20 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
       <h3 class="ph">Fortschritte</h3>
       ${es.map(e=>`<div class="ent-p"><div class="edt">${esc(entLabel(p,e))}${entDateSfx(e)}${entTags(e).length?` <span style="font-weight:400;color:#555">· ${entTags(e).join(', ')}</span>`:''}</div>
         ${dimTxt(e)?`<p><i>Fläche:</i> ${dimTxt(e)}</p>${isShaped(e)?`<div class="wskp">${shapeSvg(e,200,120)}</div>`:''}`:''}${e.note?`<p>${nl2br(e.note)}</p>`:''}${e.material?`<p><i>Material:</i> ${nl2br(e.material)}</p>`:''}
-        ${GEWERKE.map(g=>{const t=e.gwText[g]||'',ms=matsOf(e,g).map(x=>x[0]);if(!t&&!ms.length)return '';return `${t?`<p><b>${g}:</b> ${nl2br(t)}</p>`:`<p><b>${g}-Material:</b></p>`}${ms.length?matTable(ms):''}`}).join('')}
+        ${GEWERKE.map(g=>{const t=e.gwText[g]||'',ms=matsOf(e,g).map(x=>x[0]);if(!t&&!ms.length)return '';return ms.length?`<div class="matb">${t?`<p><b>${g}:</b> ${nl2br(t)}</p>`:`<p><b>${g}-Material:</b></p>`}${matTable(ms)}</div>`:`<p><b>${g}:</b> ${nl2br(t)}</p>`}).join('')}
         ${e.photoIds.length?`<div class="eph">${e.photoIds.map((id,i)=>`<div class="ephi"><img src="${urlOf(id)}" alt=""><span>${i+1}</span></div>`).join('')}</div>`:''}</div>`).join('')||'<p style="color:#666">Keine Einträge.</p>'}
       <div class="pbel"><h3 class="ph">Belege</h3>
-      ${pb.length?`<table class="mt"><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Gewerk</th><th class="r">Beleg CHF</th><th class="r">Anteil Pin CHF</th></tr></thead><tbody>
-        ${pb.map(b=>{const n=belegShares(b).size;return `<tr><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.gewerk||'')}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td><td class="r">${chf(gwShare(b,p.id,G))}${n>1?`<br><small style="color:#666">${splitModeTxt(b)} (${n} Pins)</small>`:''}</td></tr>${pdfItemRows(b,p.id,G)}`}).join('')}
-        <tr class="tot"><td colspan="6">Total Belege Pin ${p.nr}</td><td class="r">${chf(bSum)}</td></tr></tbody></table>`:'<p style="color:#666">Keine Belege zugeordnet.</p>'}
-      <div class="ptot">Kosten Pin ${p.nr}: Belege CHF ${chf(bSum)}${mSum?` · Holzbau-Material CHF ${chf(mSum)} · Total CHF ${chf(bSum+mSum)}`:''}</div></div></section>`}
-    if(hasRooms&&grp.pins.length>1)h+=`<div class="rtot">Total ${grp.room?'Zimmer '+esc(grp.room.name):'ohne Zimmer'}: Belege CHF ${chf(rb)}${rm?` · Holzbau-Material CHF ${chf(rm)} · Total CHF ${chf(rb+rm)}`:''}</div>`}}
+      ${pb.length?`<table class="mt"><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Gewerk</th><th class="r">Beleg CHF</th><th class="r">Anteil Pin CHF</th></tr></thead>
+        ${pb.map(b=>{const n=belegShares(b).size,ir=pdfItemRows(b,p.id,G);return `<tbody class="bg${ir?' bgi':''}"><tr class="bh"><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.gewerk||'')}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td><td class="r">${chf(gwShare(b,p.id,G))}${n>1?`<br><small style="color:#666">${splitModeTxt(b)} (${n} Pins)</small>`:''}</td></tr>${ir}</tbody>`}).join('')}
+        <tbody><tr class="tot"><td colspan="6">Total Belege Pin ${p.nr}</td><td class="r">${chf(bSum)}</td></tr></tbody></table>`:'<p style="color:#666">Keine Belege zugeordnet.</p>'}
+      <div class="ptot">Kosten Pin ${p.nr}: <span class="cb">Belege CHF ${chf(bSum)}</span>${mSum?` · <span class="cm">Holzbau-Material CHF ${chf(mSum)}</span> · Total CHF ${chf(bSum+mSum)}`:''}</div></div></section>`}
+    if(hasRooms&&grp.pins.length>1)h+=`<div class="rtot">Total ${grp.room?'Zimmer '+esc(grp.room.name):'ohne Zimmer'}: <span class="cb">Belege CHF ${chf(rb)}</span>${rm?` · <span class="cm">Holzbau-Material CHF ${chf(rm)}</span> · Total CHF ${chf(rb+rm)}`:''}</div>`}}
   if(o.entries){const rows=[];let tb=0,tm=0;
     for(const f of fl)for(const grp of pinGroups(f,pinsOf(f.id).filter(p=>p.entries.some(eOk)))){if(!grp.pins.length)continue;let gb=0,gm=0;const rn=grp.room?grp.room.name:(roomsOf(f).length?'Ohne Zimmer':'–');
       for(const p of grp.pins){const bS=belegeByNr().filter(b=>pinBelegIds(p).includes(b.id)).reduce((x,b)=>x+gwShare(b,p.id,G),0),mS=matTotal(entriesOf(p).filter(eOk).flatMap(e=>e.mats));tb+=bS;tm+=mS;gb+=bS;gm+=mS;rows.push(`<tr><td>${esc(floorLabel(f))}</td><td>${esc(rn)}</td><td>${p.nr} ${esc(p.title||'')}</td><td class="r">${chf(bS)}</td><td class="r">${mS?chf(mS):''}</td><td class="r">${chf(bS+mS)}</td></tr>`)}
       if(roomsOf(f).length&&grp.pins.length>1)rows.push(`<tr class="sub"><td colspan="3">Total ${esc(floorLabel(f))} · ${esc(rn)}</td><td class="r">${chf(gb)}</td><td class="r">${gm?chf(gm):''}</td><td class="r">${chf(gb+gm)}</td></tr>`)}
     const unas=b=>{const br=belegBreakdown(b);let a=+b.amount||0;for(const v of br.m.values())a-=v;for(const v of Object.values(br.gen))a-=v;return c2(a)};const ohne=belegeByNr().filter(b=>(!G||belegHasGw(b,G))&&unas(b)>0.05);const to=ohne.reduce((x,b)=>x+unas(b),0);
-    h+=`<section class="msum"><h2>Kostenübersicht nach Zimmer und Pin</h2><table class="mt"><thead><tr><th>Plan</th><th>Zimmer</th><th>Pin</th><th class="r">Belege CHF</th><th class="r">Holzbau-Material CHF</th><th class="r">Total CHF</th></tr></thead><tbody>${rows.join('')}
+    h+=`<section class="msum"><h2>Kostenübersicht nach Zimmer und Pin</h2><div class="cleg">Farben im ganzen Protokoll:<i style="background:#2563eb"></i>Belege (Rechnungen/Quittungen)<i style="background:#92400e"></i>Holzbau-Material (eigenes Material, erfasst bei den Einträgen)</div><table class="mt"><thead><tr><th>Plan</th><th>Zimmer</th><th>Pin</th><th class="r cb">Belege CHF</th><th class="r cm">Holzbau-Material CHF</th><th class="r">Total CHF</th></tr></thead><tbody>${rows.join('')}
       <tr class="tot"><td colspan="3">Total Pins</td><td class="r">${chf(tb)}</td><td class="r">${tm?chf(tm):''}</td><td class="r">${chf(tb+tm)}</td></tr></tbody></table>
       ${(()=>{const gt={};for(const b of belegeByNr()){if(G&&!belegHasGw(b,G))continue;const br=belegBreakdown(b);for(const [k,v] of Object.entries(br.gen))gt[k]=c2((gt[k]||0)+v)}const gs=genList().filter(g=>gt[g.k]);const tot=c2(tb+gs.reduce((x,g)=>x+gt[g.k],0)+to);
         return `<h3>Abstimmung Belege</h3><table class="mt"><tbody><tr><td>Belege auf Pins</td><td class="r">${chf(tb)}</td></tr>${gs.map(g=>`<tr><td>Kostenstelle ${esc(g.n)}</td><td class="r">${chf(gt[g.k])}</td></tr>`).join('')}${to?`<tr><td>Nicht zugeordnet</td><td class="r">${chf(to)}</td></tr>`:''}<tr class="tot"><td>Total Belege</td><td class="r">${chf(tot)}</td></tr></tbody></table>`})()}
