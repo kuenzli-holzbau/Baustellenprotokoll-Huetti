@@ -328,6 +328,7 @@ select.bst option{font-weight:600}
 .mlr .mf{font-size:11px;color:#0f766e;white-space:nowrap}
 .zrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
 .zrow input[data-zpct]{width:60px;text-align:right}
+.aktab{border-collapse:collapse;width:100%}.aktab td{padding:3px 4px 3px 0}.aktab input{width:100%}.aktab td:nth-child(1){width:150px}.aktab td:nth-child(2){width:120px}.aktab td:nth-child(2) input{text-align:right}.aktab td:last-child{width:34px}
 .pst .katin{width:100%;field-sizing:content;border:1px solid transparent;background:transparent;font:inherit;padding:3px 4px;border-radius:5px;resize:vertical}
 .pst .katin:hover{border-color:#d0d7de}.pst .katin:focus{border-color:#0f766e;background:#fff;outline:0}
 .pst .ku{width:46px}.pst .kp{width:72px;text-align:right}
@@ -474,6 +475,8 @@ select.bst option{font-weight:600}
   .cover table.aufst td:first-child{color:#111}
   table.aufst small{color:#666;font-size:8.5pt}
   table.aufst tr.tot td{font-weight:700;border-top:1.2pt solid #111;border-bottom:0}
+  table.aufst thead th{font-size:8.5pt;color:#555;font-weight:600;border-bottom:.8pt solid #888;padding:1mm 2mm;background:none!important}
+  table.aufst td.r{white-space:nowrap}
   #print h2{font-size:16pt;border-bottom:1.5pt solid #c2410c;padding-bottom:2mm;margin:0 0 5mm}
   .pplan{position:relative;margin:0 auto;border:.3pt solid #999}
   .pplan img{display:block;width:100%}
@@ -625,7 +628,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='76 (23.11.2026, Titelseite kompakter)';
+const APP_VERSION='77 (23.11.2026, bezahlt/offen)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1588,6 +1591,9 @@ function renderExport(){
    <p class="mut" id="cloudInfo">${esc(syncText())}</p>
    <p><button class="b p" data-act="syncNow">Jetzt synchronisieren</button> <button class="b" data-act="logout">Abmelden</button></p>
    <p class="mut" style="font-size:12px">Alle Änderungen werden zuerst auf diesem Gerät gespeichert und automatisch hochgeladen, sobald eine Internetverbindung besteht. Neue Benutzer legst du im Supabase-Dashboard an.</p></div>`:''}
+   <div class="card"><h2>Akontozahlungen Materialbezug Holzbau</h2><p class="mut" style="font-size:13px">Bereits bezahlte Beträge auf das Holzbau-Material. Erscheinen in der Aufstellung im PDF als «bezahlt»; der Rest als «offen». Belege gelten immer als bezahlt.</p>
+   <table class="aktab"><tbody>${akList().map((a,i)=>`<tr><td><input type="date" data-ak="date" data-i="${i}" value="${esc(a.date||'')}"></td><td><input data-ak="amt" data-i="${i}" inputmode="decimal" value="${a.amt!=null&&a.amt!==''?chf(+a.amt):''}" placeholder="Betrag CHF"></td><td><input data-ak="note" data-i="${i}" value="${esc(a.note||'')}" placeholder="Bemerkung"></td><td><button class="b sm" data-act="akDel" data-id="${i}" title="Zahlung löschen">×</button></td></tr>`).join('')}</tbody></table>
+   <p style="margin:8px 0 0;display:flex;gap:10px;align-items:center"><button class="b sm" data-act="akAdd">+ Zahlung</button><span class="mut">Total bezahlt: <b>CHF ${chf(akSum())}</b></span></p></div>
    <div class="card"><h2>Preisstamm Holzbau</h2><p class="mut" style="font-size:13px">Regiepreisliste S-0113 (${KAT.length} Artikel, Netto-Einkaufspreise). Der Zuschlag gilt sofort überall: Material in den Pins, Totale und PDF.</p>
    <div class="zrow"><label class="ck" style="margin:0"><input type="checkbox" data-zon ${S.project.zOn?'checked':''}> Zuschlag</label><input data-zpct inputmode="decimal" value="${qfmt(zPct())}"> %
      <span class="mut" style="font-size:12px">${S.project.zOn?'aktiv – Preise × '+qfmt(zFac()):'aus – Netto-Preise'}</span></div>
@@ -1831,6 +1837,8 @@ const ACT={
   closePin:()=>{UI.pin=null;renderPlan()},
   zoomImg:id=>showImg(id),
   closeLb:()=>{$('#lb').hidden=true},
+  akAdd:async()=>{S.project.akonto=[...akList(),{date:'',amt:'',note:''}];await dbPut('kv',S.project);render()},
+  akDel:async id=>{const l=akList().slice(),a=l[+id];if(!a)return;if((a.amt||a.date)&&!confirm(`Zahlung ${a.date?fmtDate(a.date)+' ':''}${a.amt?'CHF '+chf(+a.amt):''} löschen?`))return;l.splice(+id,1);S.project.akonto=l;await dbPut('kv',S.project);render()},
   swapMat:(id,a)=>{const p=pinById(UI.pin),e=curEntry(p);if(!e)return;const i=+id,m=e.mats[i];if(!m)return;
     if(swapOn(e,i)){UI.swap=null;renderPinPanel();return}
     UI.swap={e:e.id,i,q:(m.name||'').split(/[\s,]+/).slice(0,2).join(' ')};UI.gwOpen.add(a.dataset.gw);renderPinPanel();
@@ -2015,6 +2023,8 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(d.cost){const c=(S.project.costs||[]).find(x=>x.k===d.cost);if(!c)return;const n=t.value.trim();
     if(!n||genList().some(g=>g.k!==c.k&&g.n.toLowerCase()===n.toLowerCase())){toast(n?'Diesen Namen gibt es schon':'Name darf nicht leer sein',3000);t.value=c.n;return}
     c.n=n;await dbPut('kv',S.project);toast('Kostenstelle umbenannt',2000);return}
+  if(d.ak){const l=akList().slice(),i=+t.dataset.i;if(!l[i])return;const r=Object.assign({},l[i]);
+    if(d.ak==='amt'){const v=parseAmount(t.value);r.amt=v===''?'':+v}else r[d.ak]=t.value.trim();l[i]=r;S.project.akonto=l;await dbPut('kv',S.project);if(d.ak==='amt')render();return}
   if(d.kat){const code=t.dataset.code,o=KAT0.get(code);if(!o)return;const ov=S.project.katOv=S.project.katOv||{},x=ov[code]=ov[code]||{};
     if(d.kat==='n'){const v=t.value.replace(/\s*\n\s*/g,' ').trim();if(!v){toast('Bezeichnung darf nicht leer sein',3000);t.value=KATMAP.get(code)[1];return}if(v===o[1])delete x.n;else x.n=v}
     else if(d.kat==='u'){const v=t.value.trim();if(!v||v===o[2])delete x.u;else x.u=v}
@@ -2176,16 +2186,30 @@ function matTable(ms,code){return `<table class="mt"><thead><tr>${code?'<th>Art.
   ${ms.map(m=>`<tr>${code?`<td>${esc(m.code||'–')}</td>`:''}<td>${esc(m.name)}${m.note&&!code?`<br><i style="color:#555">${esc(m.note)}</i>`:''}</td><td class="r">${qfmt(m.qty)}</td><td>${esc(m.unit)}</td><td class="r">${m.price==null?'':chf(mPrice(m))}</td><td class="r">${chf((+m.qty||0)*(+mPrice(m)||0))}</td></tr>`).join('')}
   <tr class="tot"><td colspan="${code?5:4}">Total</td><td class="r">${chf(matTotal(ms))}</td></tr></tbody></table>`}
 /* Klare Aufstellung der Beträge (Titelseite und Schluss) */
-function aufstHtml(G){const bs=belegeByNr().filter(b=>!G||belegHasGw(b,G)),bT=bs.reduce((x,b)=>x+(G?(gwAmounts(b).get(G)||0):(+b.amount||0)),0);
+/* Akontozahlungen auf den Materialbezug Holzbau (im Projekt gespeichert) */
+const akList=()=>Array.isArray(S.project.akonto)?S.project.akonto:[];
+const akSum=()=>c2(akList().reduce((x,a)=>x+(+a.amt||0),0));
+/* Klare Aufstellung der Beträge (Titelseite und Schluss): Betrag, bezahlt, offen + Aufteilung pro Gewerk */
+function aufstHtml(G){const bs=belegeByNr().filter(b=>!G||belegHasGw(b,G)),bT=c2(bs.reduce((x,b)=>x+(G?(gwAmounts(b).get(G)||0):(+b.amount||0)),0));
   const spT=G?{chf:0}:spesTotals(),wT=APP.work&&!G?sumC(S.work):0,wH=APP.work&&!G?sumH(S.work):0;
-  const zl=S.project.zOn?`Regiepreisliste + ${qfmt(zPct())} % Zuschlag`:'Regiepreisliste, Netto-Preise';
   const ms=GEWERKE.filter(g=>!G||g===G).map(g=>[g,matTotal(allMats().filter(m=>(m.gw||'Holzbau')===g))]).filter(x=>x[1]);
   const mT=ms.reduce((x,m)=>x+m[1],0);if(!bT&&!mT&&!spT.chf)return '';
-  return `<table class="mt aufst"><tbody>
-    ${bs.length?`<tr><td>Belege von Online-Bestellungen<br><small>${bs.length} Belege${wH?` · davon Arbeitszeit ${hfmt(wH)} = CHF ${chf(wT)} (über unterschriebenen Beleg erfasst)`:''}</small></td><td class="r">CHF ${chf(bT)}</td></tr>`:''}
-    ${ms.map(([g,t])=>`<tr><td>${g==='Holzbau'?'Materialbezug bei Holzbauunternehmen':'Materialbezug '+esc(g)}</td><td class="r">CHF ${chf(t)}</td></tr>`).join('')}
-    ${spT.chf?`<tr><td>Fahrspesen<br><small>${spT.n} Fahrt${spT.n>1?'en':''} · ${chf(spT.h)} h · ${qfmt(spT.km)} km</small></td><td class="r">CHF ${chf(spT.chf)}</td></tr>`:''}
-    <tr class="tot"><td>Gesamtbetrag${G?' Gewerk '+esc(G):''}</td><td class="r">CHF ${chf(bT+mT+spT.chf)}</td></tr></tbody></table>`}
+  const ak=akList().filter(a=>+a.amt),akT=akSum();let pT=0,oT=0;
+  const row=(lab,sub,amt,paid)=>{const o=c2(amt-paid);pT+=paid;oT+=o;return `<tr><td>${lab}${sub?`<br><small>${sub}</small>`:''}</td><td class="r">${chf(amt)}</td><td class="r">${chf(paid)}</td><td class="r">${o?chf(o):'–'}</td></tr>`};
+  let h=`<table class="mt aufst"><thead><tr><th></th><th class="r">Betrag CHF</th><th class="r">bezahlt CHF</th><th class="r">offen CHF</th></tr></thead><tbody>`;
+  if(bs.length)h+=row('Belege von Online-Bestellungen',`${bs.length} Belege, alle bezahlt${wH?` · davon Arbeitszeit ${hfmt(wH)} = CHF ${chf(wT)} (über unterschriebenen Beleg erfasst)`:''}`,bT,bT);
+  for(const [g,t] of ms){const hb=g==='Holzbau',p=hb?Math.min(akT,t):0;
+    h+=row(hb?'Materialbezug bei Holzbauunternehmen':'Materialbezug '+esc(g),hb&&ak.length?'Akontozahlungen: '+ak.map(a=>`${a.date?fmtDate(a.date):'ohne Datum'} CHF ${chf(+a.amt)}`).join(' · '):'',t,p)}
+  if(spT.chf)h+=row('Fahrspesen',`${spT.n} Fahrt${spT.n>1?'en':''} · ${chf(spT.h)} h · ${qfmt(spT.km)} km`,spT.chf,0);
+  h+=`<tr class="tot"><td>Gesamtbetrag${G?' Gewerk '+esc(G):''}</td><td class="r">${chf(bT+mT+spT.chf)}</td><td class="r">${chf(pT)}</td><td class="r">${chf(oT)}</td></tr></tbody></table>`;
+  if(!G){const gb=new Map();for(const b of belegeByNr())for(const [g,v] of gwAmounts(b))gb.set(g||'',c2((gb.get(g||'')||0)+v));
+    const keys=[...new Set([...GEWERKE.filter(g=>gb.get(g)||ms.some(m=>m[0]===g)),...[...gb.keys()].filter(k=>!GEWERKE.includes(k)&&gb.get(k))])];
+    if(keys.length>1){const mOf=g=>(ms.find(m=>m[0]===g)||[0,0])[1];
+      h+=`<h3>Aufteilung pro Gewerk</h3><table class="mt aufst"><thead><tr><th>Gewerk</th><th class="r">Belege CHF</th><th class="r">Material CHF</th><th class="r">Total CHF</th></tr></thead><tbody>
+        ${keys.map(g=>{const b=gb.get(g)||0,m=mOf(g);return `<tr><td>${g?esc(g):'ohne Gewerk'}</td><td class="r">${b?chf(b):'–'}</td><td class="r">${m?chf(m):'–'}</td><td class="r">${chf(b+m)}</td></tr>`}).join('')}
+        ${spT.chf?`<tr><td>Fahrspesen</td><td class="r">–</td><td class="r">–</td><td class="r">${chf(spT.chf)}</td></tr>`:''}
+        <tr class="tot"><td>Total</td><td class="r">${chf(bT)}</td><td class="r">${chf(mT)}</td><td class="r">${chf(bT+mT+spT.chf)}</td></tr></tbody></table>`}}
+  return h}
 async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('Verknüpfungen repariert',n)}catch(e){console.warn(e)}
   const missing=S.blobs.filter(b=>!b.blob).length;if(missing&&!confirm(`${missing} Foto(s)/Beleg(e) sind noch nicht auf dieses Gerät geladen und würden im PDF fehlen. Trotzdem fortfahren?`))return;
   const o=UI.opts,P=S.project,fl=orderedFloors();toast('PDF wird vorbereitet …',60000);
