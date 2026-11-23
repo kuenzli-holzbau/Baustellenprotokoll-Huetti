@@ -463,10 +463,10 @@ select.bst option{font-weight:600}
   .qrt tr.tot td{font-weight:700;border-top:.8pt solid #333;border-bottom:0}
   .qrs{margin-top:12mm;break-inside:avoid}.qrs p{margin:0 0 8mm}.qrs .sg{display:flex;gap:12mm}.qrs .sg div{flex:1}
   .qrs .ln{border-bottom:.6pt solid #333;height:12mm}.qrs small{color:#555}
-  .cover{padding-top:50mm}
+  .cover{padding-top:22mm}
   .cover h1{font-size:28pt;margin:0 0 4mm}
-  .cover .addr{font-size:15pt;color:#444;margin:0 0 14mm}
-  .cover table{border-collapse:collapse;margin-bottom:12mm}
+  .cover .addr{font-size:15pt;color:#444;margin:0 0 9mm}
+  .cover table{border-collapse:collapse;margin-bottom:8mm}
   .cover td{padding:2mm 8mm 2mm 0;border-bottom:.3pt solid #ccc}
   .cover td:first-child{color:#666}
   table.aufst{width:100%;font-size:11pt;margin:2mm 0 8mm}
@@ -625,7 +625,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='75 (23.11.2026, Zusammenzug pro Artikel)';
+const APP_VERSION='76 (23.11.2026, Titelseite kompakter)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -2152,7 +2152,7 @@ $('#stage').addEventListener('wheel',e=>{if(!e.ctrlKey||!$('#stage .plan'))retur
 const allMats=()=>S.pins.flatMap(p=>p.entries.flatMap(e=>e.mats));
 /* gleiche Artikel zusammenzählen (Artikel-Nr., Bezeichnung, Einheit, Preis) */
 function aggMats(ms){const agg=new Map();for(const m of ms){const k=[m.code,m.name,m.unit,m.price].join('|');const a=agg.get(k)||Object.assign({},m,{qty:0,note:''});a.qty+=(+m.qty||0);agg.set(k,a)}
-  return [...agg.values()].sort((a,b)=>(a.code||'zzz').localeCompare(b.code||'zzz')||a.name.localeCompare(b.name))}
+  return [...agg.values()].filter(a=>+a.qty).sort((a,b)=>(a.code||'zzz').localeCompare(b.code||'zzz')||a.name.localeCompare(b.name))}
 /* Material und Stärke aus der Artikelbezeichnung: «OSB 3, N&K d:25mm» → OSB 3 · 25 mm; «Isover Uniroll 034 b:1200mm d:160mm» → Isover Uniroll 034 · 160 mm */
 const HOLZARTEN=/\b(Fichte|Tanne|Lärche|Eiche|Buche|Kiefer|Douglasie|Esche|Nussbaum|Arve|Ahorn|Birke|Thermo[- ]?\w+|Weisstanne|Seekiefer)\b/i;
 function matSplit(name){let n=String(name||'').replace(/\s+/g,' ').trim(),t='',m;
