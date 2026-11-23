@@ -477,6 +477,7 @@ select.bst option{font-weight:600}
   table.aufst tr.tot td{font-weight:700;border-top:1.2pt solid #111;border-bottom:0}
   table.aufst thead th{font-size:8.5pt;color:#555;font-weight:600;border-bottom:.8pt solid #888;padding:1mm 2mm;background:none!important}
   table.aufst td.r{white-space:nowrap}
+  .toc{break-inside:avoid;page-break-inside:avoid}
   #print h2{font-size:16pt;border-bottom:1.5pt solid #c2410c;padding-bottom:2mm;margin:0 0 5mm}
   .pplan{position:relative;margin:0 auto;border:.3pt solid #999}
   .pplan img{display:block;width:100%}
@@ -628,7 +629,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='79 (23.11.2026, Fahrspesen bezahlt)';
+const APP_VERSION='80 (23.11.2026, Inhalt zusammen)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -2223,7 +2224,7 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
    <tr><td>Umfang</td><td>${fl.length} Plan/Pläne · ${S.pins.length} Pins · ${S.pins.reduce((s,p)=>s+p.entries.length,0)} Einträge · ${S.pins.reduce((s,p)=>s+pinPhotos(p).length,0)} Fotos · ${S.belege.length} Belege</td></tr>
    </table>
    ${(x=>x?'<h3>Aufstellung</h3>'+x:'')(aufstHtml(o.gw||''))}
-   <h3>Inhalt</h3><ol>${fl.map(f=>`<li>${esc(floorLabel(f))} (${pinsOf(f.id).length} Pins${roomsOf(f).length?' in '+roomsOf(f).length+' Zimmern: '+roomsOf(f).map(r=>esc(r.name)).join(', '):''})</li>`).join('')}${o.entries?'<li>Kostenübersicht nach Zimmer und Pin</li>':''}${o.mats&&allMats().length?'<li>Materialbezug</li>':''}${o.list&&S.belege.length?'<li>Belegliste</li>':''}${APP.work&&o.work&&!o.gw&&S.work.length?'<li>Arbeitszeit</li>':''}<li>Gesamtbetrag Projekt</li>${o.att&&S.belege.length?'<li>Anhang: Belege</li>':''}</ol></section>`;
+   <div class="toc"><h3>Inhalt</h3><ol>${fl.map(f=>`<li>${esc(floorLabel(f))} (${pinsOf(f.id).length} Pins${roomsOf(f).length?' in '+roomsOf(f).length+' Zimmern: '+roomsOf(f).map(r=>esc(r.name)).join(', '):''})</li>`).join('')}${o.entries?'<li>Kostenübersicht nach Zimmer und Pin</li>':''}${o.mats&&allMats().length?'<li>Materialbezug</li>':''}${o.list&&S.belege.length?'<li>Belegliste</li>':''}${APP.work&&o.work&&!o.gw&&S.work.length?'<li>Arbeitszeit</li>':''}<li>Gesamtbetrag Projekt</li>${o.att&&S.belege.length?'<li>Anhang: Belege</li>':''}</ol></div></section>`;
   const G=o.gw,eOk=e=>!G||entTags(e).includes(G)||e.belegIds.some(id=>{const b=belegById(id),p=S.pins.find(q=>q.entries.includes(e));return b&&p&&gwShare(b,p.id,G)>0});
   for(const f of fl){const pins=pinsOf(f.id).filter(p=>p.entries.some(eOk));if(G&&!pins.length)continue;
     if(o.plans&&f.planId){const b=blobMap.get(f.planId)||{};const w=b.w||1,hh=b.h||1;const wmm=Math.min(184,240*w/hh);
