@@ -535,6 +535,8 @@ select.bst option{font-weight:600}
   .msum{break-before:page}
   .msum+.msum{break-before:auto;margin-top:12mm}
   .msum h2{break-after:avoid}
+  .flm{margin-top:8mm}.flmh{border-bottom:1.2pt solid #92400e;padding-bottom:1mm;break-after:avoid}
+  .flm h4{margin:3mm 0 1mm;font-size:10pt;color:#78350f;break-after:avoid}
   .eph{display:grid;grid-template-columns:repeat(4,1fr);gap:2mm;margin-top:2mm}
   .eph img{width:100%;height:34mm;object-fit:cover;background:#f3f3f3;border-radius:1mm;break-inside:avoid;display:block}
   .ephi{position:relative;break-inside:avoid}
@@ -623,7 +625,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='72 (23.11.2026, Aufstellung)';
+const APP_VERSION='73 (23.11.2026, Material pro Geschoss)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1573,6 +1575,7 @@ function renderExport(){
     <label class="ck"><input type="checkbox" data-opt="plans" ${o.plans?'checked':''}> Grundrisse mit Zimmern, pro Zimmer Ausschnitt mit Pins</label>
     <label class="ck"><input type="checkbox" data-opt="entries" ${o.entries?'checked':''}> Pro Pin: Dokumentation, Fotos und Belege (mit Aufteilung)</label>
     <label class="ck"><input type="checkbox" data-opt="mats" ${o.mats?'checked':''}> Materialbezug pro Gewerk mit Kosten</label>
+    <label class="ck"><input type="checkbox" data-opt="matsFl" ${o.matsFl?'checked':''}> Materialbezug pro Geschoss (Zusammenzug je Grundriss)</label>
     ${APP.work?`<label class="ck"><input type="checkbox" data-opt="work" ${o.work?'checked':''}> Arbeitszeit als Nachweis (nicht im Gesamtbetrag)</label>`:''}
     <label class="ck"><input type="checkbox" data-opt="list" ${o.list?'checked':''}> Belegliste mit Totalen pro Kategorie</label>
     <label class="ck"><input type="checkbox" data-opt="att" ${o.att?'checked':''}> Belege als Anhang (eine Seite pro Beleg)</label>
@@ -2147,6 +2150,9 @@ $('#stage').addEventListener('wheel',e=>{if(!e.ctrlKey||!$('#stage .plan'))retur
 
 /* ---------- PDF-Export ---------- */
 const allMats=()=>S.pins.flatMap(p=>p.entries.flatMap(e=>e.mats));
+/* gleiche Artikel zusammenzählen (Artikel-Nr., Bezeichnung, Einheit, Preis) */
+function aggMats(ms){const agg=new Map();for(const m of ms){const k=[m.code,m.name,m.unit,m.price].join('|');const a=agg.get(k)||Object.assign({},m,{qty:0,note:''});a.qty+=(+m.qty||0);agg.set(k,a)}
+  return [...agg.values()].sort((a,b)=>(a.code||'zzz').localeCompare(b.code||'zzz')||a.name.localeCompare(b.name))}
 /* Material und Stärke aus der Artikelbezeichnung: «OSB 3, N&K d:25mm» → OSB 3 · 25 mm; «Isover Uniroll 034 b:1200mm d:160mm» → Isover Uniroll 034 · 160 mm */
 const HOLZARTEN=/\b(Fichte|Tanne|Lärche|Eiche|Buche|Kiefer|Douglasie|Esche|Nussbaum|Arve|Ahorn|Birke|Thermo[- ]?\w+|Weisstanne|Seekiefer)\b/i;
 function matSplit(name){let n=String(name||'').replace(/\s+/g,' ').trim(),t='',m;
@@ -2230,6 +2236,12 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
       h+=`<h3>${g}${supplierOf(g)!=='Regiepreisliste'?' <span style="font-weight:400;color:#666">· '+esc(supplierOf(g))+'</span>':''}</h3>${matTable(rows,true)}${g==='Holzbau'?holzSummary(ms):''}`}
     h+=`<h3>Total pro Gewerk</h3><table class="mt"><tbody>${GEWERKE.map(g=>{const t=matTotal(all.filter(m=>(m.gw||'Holzbau')===g));return t?`<tr><td>${g}</td><td class="r">CHF ${chf(t)}</td></tr>`:''}).join('')}<tr class="tot"><td>Total Material</td><td class="r">CHF ${chf(matTotal(all))}</td></tr></tbody></table>
     <h3>Nach Plan</h3><table class="mt"><tbody>${fl.map(f=>{const t=matTotal(pinsOf(f.id).flatMap(p=>p.entries.flatMap(e=>e.mats)));return t?`<tr><td>${esc(floorLabel(f))}</td><td class="r">CHF ${chf(t)}</td></tr>`:''}).join('')}</tbody></table></section>`}
+  if(o.matsFl&&allMats().length){let any=false,sec=`<section class="msum"><h2>Materialbezug pro Geschoss</h2><p style="color:#666">Alle erfassten Mengen pro Grundriss zusammengezählt${S.project.zOn?`, Holzbau inkl. ${qfmt(zPct())} % Zuschlag`:''}.</p>`;const tots=[];
+    for(const f of fl){const fm=pinsOf(f.id).flatMap(p=>p.entries.flatMap(e=>e.mats)).filter(m=>!G||(m.gw||'Holzbau')===G);if(!fm.length)continue;any=true;
+      sec+=`<div class="flm"><h3 class="flmh">${esc(floorLabel(f))} <span style="font-weight:400;color:#666">· CHF ${chf(matTotal(fm))}</span></h3>`;
+      for(const g of GEWERKE){const ms=fm.filter(m=>(m.gw||'Holzbau')===g);if(!ms.length)continue;sec+=`<h4>${g}</h4>${matTable(aggMats(ms),true)}${g==='Holzbau'?holzSummary(ms).replace('<h3>Holzbau – Zusammenzug pro Material und Stärke</h3>','<h4>Zusammenzug pro Material und Stärke</h4>'):''}`}
+      sec+='</div>';tots.push([f,matTotal(fm)])}
+    if(any)h+=sec+`<h3>Total pro Geschoss</h3><table class="mt"><tbody>${tots.map(([f,t])=>`<tr><td>${esc(floorLabel(f))}</td><td class="r">CHF ${chf(t)}</td></tr>`).join('')}<tr class="tot"><td>Total Material</td><td class="r">CHF ${chf(tots.reduce((x,a)=>x+a[1],0))}</td></tr></tbody></table></section>`}
   const bs=belegeByNr().filter(b=>!o.gw||belegHasGw(b,o.gw)),bAmt=b=>G?(gwAmounts(b).get(G)||0):(+b.amount||0);
   if(o.list&&bs.length){const fn=id=>floorLabel(floorById(id));
     h+=`<section class="blist"><h2>Belegliste</h2><table><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Kategorie</th><th>Gewerk</th><th>Pins</th><th style="text-align:right">CHF</th></tr></thead><tbody>
