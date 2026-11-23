@@ -628,7 +628,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='78 (23.11.2026, Material bezahlt)';
+const APP_VERSION='79 (23.11.2026, Fahrspesen bezahlt)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -1601,6 +1601,7 @@ function renderExport(){
    <input id="pstQ" data-pstq placeholder="🔍 Artikel suchen, z.B. OSB 18 oder 101.149" value="${esc(UI.pstQ||'')}" style="width:100%;margin-top:10px">
    <div id="pstList">${pstList()}</div></div>
    <div class="card"><h2>Fahrspesen</h2><p class="mut" style="font-size:13px">Bei Belegen dieser Lieferanten erscheinen unter dem Betrag Felder für Fahrzeit und km, je mit Ansatz. Die Ansätze hier sind die Vorgabe; beim einzelnen Beleg lassen sie sich ändern. Die Spesen erscheinen in der Kostenübersicht und im Export als eigener Posten.</p>
+   <label class="ck" style="margin:4px 0 8px"><input type="checkbox" data-pf="spesPaid" ${S.project.spesPaid?'checked':''}> Fahrspesen sind bezahlt</label>
    <p class="gwr"><span style="width:160px">Lieferanten</span><input data-pf="spesLief" value="${esc(S.project.spesLief!=null?S.project.spesLief:'Bauhaus')}" placeholder="Bauhaus, Jumbo" style="flex:1"></p>
    <p class="gwr"><span style="width:160px">Vorgabe CHF pro km</span><input data-pf="kmRate" inputmode="decimal" value="${S.project.kmRate!=null&&S.project.kmRate!==''?chf(S.project.kmRate):''}" placeholder="0.70" style="width:110px"></p>
    <p class="gwr"><span style="width:160px">Vorgabe Fahrzeit CHF/Std.</span><input data-pf="fahrRate" inputmode="decimal" value="${S.project.fahrRate!=null&&S.project.fahrRate!==''?chf(S.project.fahrRate):''}" placeholder="${chf(fahrRate())}" style="width:110px"><small class="mut">leer = Stundenansatz</small></p>
@@ -2036,7 +2037,7 @@ document.addEventListener('change',async e=>{const t=e.target,d=t.dataset;
   if(d.opt){UI.opts[d.opt]=t.checked;return}
   if(d.room){const f=curFloor(),r=f&&(f.rooms||[]).find(x=>x.id===d.room);if(!r||!t.value.trim())return renderPlan();r.name=t.value.trim();await dbPut('floors',f);renderStage();renderPinPanel();return}
   if(d.bld){const b=bldById(d.bld);if(!b||!t.value.trim())return renderPlan();b.name=t.value.trim();await dbPut('buildings',b);renderFloorList();renderStage();return}
-  if(d.pf==='matPaid'){S.project.matPaid=t.checked;await dbPut('kv',S.project);renderExport();return}
+  if(d.pf==='matPaid'||d.pf==='spesPaid'){S.project[d.pf]=t.checked;await dbPut('kv',S.project);renderExport();return}
   if(d.pf){S.project[d.pf]=t.value;await dbPut('kv',S.project);if(d.pf==='name')document.querySelectorAll('[data-pf="name"]').forEach(i=>{if(i!==t)i.value=t.value});if(d.pf==='rate'){const v=parseAmount(t.value);S.project.rate=v;await dbPut('kv',S.project);renderArbeit()}if(d.pf==='kmRate'||d.pf==='fahrRate'){S.project[d.pf]=parseAmount(t.value);await dbPut('kv',S.project);renderExport()}if(d.pf==='spesLief'){renderExport()}return}
   if(d.split){const b=belegById(t.closest('tr').dataset.id);if(!b)return;b.split=b.split||{};const v=parseAmount(t.value);if(v==='')delete b.split[d.split];else b.split[d.split]=v;await dbPut('belege',b);renderBelege();return}
   if(d.bf==='status'){const b=belegById(t.closest('tr').dataset.id);if(!b)return;let v=t.value;if(v==='__new'){v=await newStatus();if(!v){renderBelege();return}}
@@ -2203,7 +2204,7 @@ function aufstHtml(G){const bs=belegeByNr().filter(b=>!G||belegHasGw(b,G)),bT=c2
   const mp=!!S.project.matPaid;
   for(const [g,t] of ms){const hb=g==='Holzbau',p=mp?t:hb?Math.min(akT,t):0;
     h+=row(hb?'Materialbezug bei Holzbauunternehmen':'Materialbezug '+esc(g),mp?'vollständig bezahlt':hb&&ak.length?'Akontozahlungen: '+ak.map(a=>`${a.date?fmtDate(a.date):'ohne Datum'} CHF ${chf(+a.amt)}`).join(' · '):'',t,p)}
-  if(spT.chf)h+=row('Fahrspesen',`${spT.n} Fahrt${spT.n>1?'en':''} · ${chf(spT.h)} h · ${qfmt(spT.km)} km`,spT.chf,0);
+  if(spT.chf)h+=row('Fahrspesen',`${spT.n} Fahrt${spT.n>1?'en':''} · ${chf(spT.h)} h · ${qfmt(spT.km)} km${S.project.spesPaid?' · bezahlt':''}`,spT.chf,S.project.spesPaid?spT.chf:0);
   h+=`<tr class="tot"><td>Gesamtbetrag${G?' Gewerk '+esc(G):''}</td><td class="r">${chf(bT+mT+spT.chf)}</td><td class="r">${chf(pT)}</td><td class="r">${chf(oT)}</td></tr></tbody></table>`;
   if(!G){const gb=new Map();for(const b of belegeByNr())for(const [g,v] of gwAmounts(b))gb.set(g||'',c2((gb.get(g||'')||0)+v));
     const keys=[...new Set([...GEWERKE.filter(g=>gb.get(g)||ms.some(m=>m[0]===g)),...[...gb.keys()].filter(k=>!GEWERKE.includes(k)&&gb.get(k))])];
