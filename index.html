@@ -625,7 +625,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='74 (23.11.2026, Zusammenzug voller Text)';
+const APP_VERSION='75 (23.11.2026, Zusammenzug pro Artikel)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -2166,7 +2166,7 @@ function matSplit(name){let n=String(name||'').replace(/\s+/g,' ').trim(),t='',m
   const sp=n.match(HOLZARTEN);if(sp&&!mat.toLowerCase().includes(sp[1].toLowerCase()))mat+=', '+sp[1];
   return {mat:mat||n,t:t?t.replace(',','.'):''}}
 /* Zusammenzug Holzbau pro Material und Stärke (m², m³, m) für den Export */
-function holzSummary(ms){const g=new Map();for(const m of ms){if(!/^(m²|m2|m³|m3|m|lfm)$/i.test((m.unit||'').trim()))continue;const r=matSplit(m.name),k=[r.mat,r.t,m.unit].join('|');
+function holzSummary(ms){const g=new Map();for(const m of ms){if(!/^(m²|m2|m³|m3|m|lfm)$/i.test((m.unit||'').trim()))continue;const r=matSplit(m.name),k=[r.mat,r.t,m.unit,m.code||m.name,mPrice(m)].join('|');
     const a=g.get(k)||{mat:r.mat,t:r.t,unit:m.unit,qty:0,chf:0,n:new Set(),nm:new Set()};a.qty+=(+m.qty||0);a.chf+=(+m.qty||0)*(+mPrice(m)||0);a.n.add(m.code||m.name);a.nm.add(m.name);g.set(k,a)}
   if(!g.size)return '';const rows=[...g.values()].sort((a,b)=>a.mat.localeCompare(b.mat,'de')||(+a.t||0)-(+b.t||0)||a.unit.localeCompare(b.unit));
   return `<h3>Holzbau – Zusammenzug pro Material und Stärke</h3><table class="mt"><thead><tr><th>Material</th><th class="r">Stärke</th><th class="r">Menge</th><th>Einh.</th><th class="r">CHF</th></tr></thead><tbody>
