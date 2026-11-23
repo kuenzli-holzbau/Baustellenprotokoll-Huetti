@@ -469,6 +469,11 @@ select.bst option{font-weight:600}
   .cover table{border-collapse:collapse;margin-bottom:12mm}
   .cover td{padding:2mm 8mm 2mm 0;border-bottom:.3pt solid #ccc}
   .cover td:first-child{color:#666}
+  table.aufst{width:100%;font-size:11pt;margin:2mm 0 8mm}
+  table.aufst td{padding:2.2mm 2mm;border-bottom:.4pt solid #ccc;vertical-align:top}
+  .cover table.aufst td:first-child{color:#111}
+  table.aufst small{color:#666;font-size:8.5pt}
+  table.aufst tr.tot td{font-weight:700;border-top:1.2pt solid #111;border-bottom:0}
   #print h2{font-size:16pt;border-bottom:1.5pt solid #c2410c;padding-bottom:2mm;margin:0 0 5mm}
   .pplan{position:relative;margin:0 auto;border:.3pt solid #999}
   .pplan img{display:block;width:100%}
@@ -517,7 +522,8 @@ select.bst option{font-weight:600}
   .cleg{font-size:8pt;color:#444;margin:1mm 0 2mm}.cleg i{display:inline-block;width:3mm;height:3mm;vertical-align:-.4mm;margin:0 1mm 0 3mm}
   .mt tr{break-inside:avoid;page-break-inside:avoid}
   .ph{font-size:10.5pt;margin:3mm 0 1.5mm;border-bottom:.5pt solid #ccc;padding-bottom:.8mm}
-  .ptot{margin-top:2.5mm;padding:2mm 3mm;background:#f6f3ee;border-left:1.2mm solid #c2410c;font-weight:700}
+  .ptot{margin-top:5mm;padding:2mm 3mm;background:#f6f3ee;border-left:1.2mm solid #c2410c;font-weight:700}
+  .ptot .ptl{font-size:8pt;font-weight:600;color:#c2410c;text-transform:uppercase;letter-spacing:.3pt;margin-bottom:.8mm}
   .ent-p p{margin:.6mm 0 1.2mm}
   .ent-p{margin:1mm 0 3mm 6mm;border-left:.8pt solid #ddd;padding-left:3mm}
   .ent-p>p,.wskp,.matb>p{break-inside:avoid;break-after:avoid}
@@ -617,7 +623,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='70 (22.11.2026, PDF kompakter)';
+const APP_VERSION='71 (23.11.2026, Aufstellung)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -2163,6 +2169,17 @@ function holzSummary(ms){const g=new Map();for(const m of ms){if(!/^(m²|m2|m³|
 function matTable(ms,code){return `<table class="mt"><thead><tr>${code?'<th>Art.-Nr.</th>':''}<th>Material</th><th class="r">Menge</th><th>Einh.</th><th class="r">CHF/Einh.</th><th class="r">CHF</th></tr></thead><tbody>
   ${ms.map(m=>`<tr>${code?`<td>${esc(m.code||'–')}</td>`:''}<td>${esc(m.name)}${m.note&&!code?`<br><i style="color:#555">${esc(m.note)}</i>`:''}</td><td class="r">${qfmt(m.qty)}</td><td>${esc(m.unit)}</td><td class="r">${m.price==null?'':chf(mPrice(m))}</td><td class="r">${chf((+m.qty||0)*(+mPrice(m)||0))}</td></tr>`).join('')}
   <tr class="tot"><td colspan="${code?5:4}">Total</td><td class="r">${chf(matTotal(ms))}</td></tr></tbody></table>`}
+/* Klare Aufstellung der Beträge (Titelseite und Schluss) */
+function aufstHtml(G){const bs=belegeByNr().filter(b=>!G||belegHasGw(b,G)),bT=bs.reduce((x,b)=>x+(G?(gwAmounts(b).get(G)||0):(+b.amount||0)),0);
+  const spT=G?{chf:0}:spesTotals(),wT=APP.work&&!G?sumC(S.work):0,wH=APP.work&&!G?sumH(S.work):0;
+  const zl=S.project.zOn?`Regiepreisliste + ${qfmt(zPct())} % Zuschlag`:'Regiepreisliste, Netto-Preise';
+  const ms=GEWERKE.filter(g=>!G||g===G).map(g=>[g,matTotal(allMats().filter(m=>(m.gw||'Holzbau')===g))]).filter(x=>x[1]);
+  const mT=ms.reduce((x,m)=>x+m[1],0);if(!bT&&!mT&&!spT.chf)return '';
+  return `<table class="mt aufst"><tbody>
+    ${bs.length?`<tr><td>Belege von Online-Bestellungen<br><small>${bs.length} Belege${wH?` · davon Arbeitszeit ${hfmt(wH)} = CHF ${chf(wT)} (über unterschriebenen Beleg erfasst)`:''}</small></td><td class="r">CHF ${chf(bT)}</td></tr>`:''}
+    ${ms.map(([g,t])=>`<tr><td>${g==='Holzbau'?'Materialbezug bei Holzbauunternehmen':'Materialbezug '+esc(g)}<br><small>erfasste Mengen, ${zl}</small></td><td class="r">CHF ${chf(t)}</td></tr>`).join('')}
+    ${spT.chf?`<tr><td>Fahrspesen<br><small>${spT.n} Fahrt${spT.n>1?'en':''} · ${chf(spT.h)} h · ${qfmt(spT.km)} km</small></td><td class="r">CHF ${chf(spT.chf)}</td></tr>`:''}
+    <tr class="tot"><td>Gesamtbetrag${G?' Gewerk '+esc(G):''}</td><td class="r">CHF ${chf(bT+mT+spT.chf)}</td></tr></tbody></table>`}
 async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('Verknüpfungen repariert',n)}catch(e){console.warn(e)}
   const missing=S.blobs.filter(b=>!b.blob).length;if(missing&&!confirm(`${missing} Foto(s)/Beleg(e) sind noch nicht auf dieses Gerät geladen und würden im PDF fehlen. Trotzdem fortfahren?`))return;
   const o=UI.opts,P=S.project,fl=orderedFloors();toast('PDF wird vorbereitet …',60000);
@@ -2170,9 +2187,8 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
    ${P.period?`<tr><td>Zeitraum</td><td>${esc(P.period)}</td></tr>`:''}${P.author?`<tr><td>Verfasser</td><td>${esc(P.author)}</td></tr>`:''}
    <tr><td>Erstellt am</td><td>${fmtDate(today())}</td></tr>
    <tr><td>Umfang</td><td>${fl.length} Plan/Pläne · ${S.pins.length} Pins · ${S.pins.reduce((s,p)=>s+p.entries.length,0)} Einträge · ${S.pins.reduce((s,p)=>s+pinPhotos(p).length,0)} Fotos · ${S.belege.length} Belege</td></tr>
-   ${allMats().length?`<tr><td>Material total</td><td>CHF ${chf(matTotal(allMats()))}<br><small>${GEWERKE.map(g=>{const t=matTotal(allMats().filter(m=>(m.gw||'Holzbau')===g));return t?g+' '+chf(t):''}).filter(Boolean).join(' · ')}</small></td></tr>`:''}
-   ${APP.work&&S.work.length?`<tr><td>Arbeitszeit</td><td>${hfmt(sumH(S.work))} · CHF ${chf(sumC(S.work))} <small style="color:#666">(Nachweis, nicht im Gesamtbetrag)</small></td></tr>`:''}
-   ${S.belege.length?`<tr><td>Total Belege</td><td>CHF ${chf(S.belege.reduce((s,b)=>s+(+b.amount||0),0))}</td></tr>`:''}</table>
+   </table>
+   ${(x=>x?'<h3>Aufstellung</h3>'+x:'')(aufstHtml(o.gw||''))}
    <h3>Inhalt</h3><ol>${fl.map(f=>`<li>${esc(floorLabel(f))} (${pinsOf(f.id).length} Pins${roomsOf(f).length?' in '+roomsOf(f).length+' Zimmern: '+roomsOf(f).map(r=>esc(r.name)).join(', '):''})</li>`).join('')}${o.entries?'<li>Kostenübersicht nach Zimmer und Pin</li>':''}${o.mats&&allMats().length?'<li>Materialbezug</li>':''}${o.list&&S.belege.length?'<li>Belegliste</li>':''}${APP.work&&o.work&&!o.gw&&S.work.length?'<li>Arbeitszeit</li>':''}<li>Gesamtbetrag Projekt</li>${o.att&&S.belege.length?'<li>Anhang: Belege</li>':''}</ol></section>`;
   const G=o.gw,eOk=e=>!G||entTags(e).includes(G)||e.belegIds.some(id=>{const b=belegById(id),p=S.pins.find(q=>q.entries.includes(e));return b&&p&&gwShare(b,p.id,G)>0});
   for(const f of fl){const pins=pinsOf(f.id).filter(p=>p.entries.some(eOk));if(G&&!pins.length)continue;
@@ -2194,7 +2210,7 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
       ${pb.length?`<table class="mt"><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Gewerk</th><th class="r">Beleg CHF</th><th class="r">Anteil Pin CHF</th></tr></thead>
         ${pb.map(b=>{const n=belegShares(b).size,ir=pdfItemRows(b,p.id,G);return `<tbody class="bg${ir?' bgi':''}"><tr class="bh"><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.gewerk||'')}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td><td class="r">${chf(gwShare(b,p.id,G))}${n>1?`<br><small style="color:#666">${splitModeTxt(b)} (${n} Pins)</small>`:''}</td></tr>${ir}</tbody>`}).join('')}
         <tbody><tr class="tot"><td colspan="6">Total Belege Pin ${p.nr}</td><td class="r">${chf(bSum)}</td></tr></tbody></table>`:'<p style="color:#666">Keine Belege zugeordnet.</p>'}
-      <div class="ptot">Kosten Pin ${p.nr}: <span class="cb">Belege CHF ${chf(bSum)}</span>${mSum?` · <span class="cm">Holzbau-Material CHF ${chf(mSum)}</span> · Total CHF ${chf(bSum+mSum)}`:''}</div></div></section>`}
+      </div><div class="ptot"><div class="ptl">Zusammenfassung Pin ${p.nr}${p.title?' – '+esc(p.title):''}</div><span class="cb">Belege CHF ${chf(bSum)}</span>${mSum?` · <span class="cm">Holzbau-Material CHF ${chf(mSum)}</span> · Total CHF ${chf(bSum+mSum)}`:''}</div></section>`}
     if(hasRooms&&grp.pins.length>1)h+=`<div class="rtot">Total ${grp.room?'Zimmer '+esc(grp.room.name):'ohne Zimmer'}: <span class="cb">Belege CHF ${chf(rb)}</span>${rm?` · <span class="cm">Holzbau-Material CHF ${chf(rm)}</span> · Total CHF ${chf(rb+rm)}`:''}</div>`}}
   if(o.entries){const rows=[];let tb=0,tm=0;
     for(const f of fl)for(const grp of pinGroups(f,pinsOf(f.id).filter(p=>p.entries.some(eOk)))){if(!grp.pins.length)continue;let gb=0,gm=0;const rn=grp.room?grp.room.name:(roomsOf(f).length?'Ohne Zimmer':'–');
@@ -2237,10 +2253,7 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
     ${ws.map(w=>`<tr><td>${fmtDate(w.date)}</td>${mm?`<td>${esc(maName(maOf(w)))}</td>`:''}${tz?`<td>${esc(w.von||'')}</td><td>${esc(w.bis||'')}</td><td class="r">${w.pause?w.pause+' Min':''}</td>`:''}<td>${esc(w.note||'')}</td><td class="r">${chf(workHours(w))}</td>${rt.size>1?`<td class="r">${chf(workRate(w))}</td>`:''}<td class="r">${chf(workCost(w))}</td></tr>`).join('')}
     <tr class="tot"><td colspan="${(tz?5:2)+(mm?1:0)}">Total Arbeitszeit</td><td class="r">${chf(sumH(ws))}</td>${rt.size>1?'<td></td>':''}<td class="r">${chf(sumC(ws))}</td></tr></tbody></table>
     ${mm?`<h3>Nach Mitarbeiter</h3><table class="mt"><thead><tr><th>Mitarbeiter</th><th class="r">Std.</th><th class="r">CHF</th></tr></thead><tbody>${[...new Set(ws.map(maOf))].map(k=>{const l=ws.filter(w=>maOf(w)===k);return `<tr><td>${esc(maName(k))}</td><td class="r">${chf(sumH(l))}</td><td class="r">${chf(sumC(l))}</td></tr>`}).join('')}</tbody></table>`:''}<h3>Nach Jahr</h3><table class="mt"><thead><tr><th>Jahr</th><th class="r">Std.</th><th class="r">CHF</th></tr></thead><tbody>${[...yr].sort().map(([y,[hh,c]])=>`<tr><td>${y}</td><td class="r">${chf(hh)}</td><td class="r">${chf(c)}</td></tr>`).join('')}</tbody></table></section>`}
-  {const spT=G?{chf:0}:spesTotals(),bT=bs.reduce((x,b)=>x+bAmt(b),0),mT=matTotal(G?allMats().filter(m=>(m.gw||'Holzbau')===G):allMats()),wT=APP.work&&!G?sumC(S.work):0,wH=APP.work&&!G?sumH(S.work):0;
-    h+=`<section class="msum"><h2>Gesamtbetrag Projekt${G?' – Gewerk '+esc(G):''}</h2><table class="mt" style="font-size:11pt"><tbody>
-    <tr><td>Belege</td><td class="r">CHF ${chf(bT)}</td></tr>${mT?`<tr><td>Material (erfasste Mengen, Regiepreisliste${S.project.zOn?` + ${qfmt(zPct())} % Zuschlag`:', Netto-Preise'})</td><td class="r">CHF ${chf(mT)}</td></tr>`:''}${spT.chf?`<tr><td>Fahrspesen (${spT.n} Fahrt${spT.n>1?'en':''} · ${chf(spT.h)} h · ${qfmt(spT.km)} km)</td><td class="r">CHF ${chf(spT.chf)}</td></tr>`:''}
-    <tr class="tot"><td>Gesamtbetrag</td><td class="r">CHF ${chf(bT+mT+spT.chf)}</td></tr></tbody></table>${wH?`<p style="color:#666;font-size:9pt">Arbeitszeit (${hfmt(wH)}, CHF ${chf(wT)}) ist nicht im Gesamtbetrag enthalten: Der Betrag ist über den unterschriebenen Beleg erfasst; die Aufstellung oben dient nur als Nachweis.</p>`:''}</section>`}
+  h+=`<section class="msum"><h2>Gesamtbetrag Projekt${G?' – Gewerk '+esc(G):''}</h2>${aufstHtml(G||'')}</section>`;
   if(o.att){const tmpUrls=[];window._attUrls=(window._attUrls||[]).concat(tmpUrls);let k=0;
     for(const b of bs){const f=blobMap.get(b.fileId),isPdf=f&&f.mime==='application/pdf'&&f.blob;if(!b.previewId&&!isPdf)continue;k++;let pages=b.previewId?[urlOf(b.previewId)]:[];
       if(f&&f.mime==='application/pdf'&&f.blob){try{const doc=await openPdf(f.blob);if(doc.numPages>1||!b.previewId){pages=[];for(let i=1;i<=doc.numPages;i++){toast(`PDF wird erstellt – Beleg B-${pad(b.nr)}, Seite ${i} von ${doc.numPages} …`,60000);const u=URL.createObjectURL(await renderPdfPage(doc,i,1700));tmpUrls.push(u);pages.push(u)}}}catch(e){console.warn(e)}}
