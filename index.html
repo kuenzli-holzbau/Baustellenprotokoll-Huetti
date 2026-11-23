@@ -510,10 +510,11 @@ select.bst option{font-weight:600}
   .enr{flex:none;width:7mm;height:7mm;border-radius:50%;background:#c2410c;color:#fff;font-weight:700;font-size:9pt;display:flex;align-items:center;justify-content:center}
   .ed{margin-left:auto;color:#666}
   .entry p{margin:1mm 0 2mm}
-  .pinsec{margin-top:9mm;padding-top:3mm;border-top:1.2pt solid #c2410c}
-  .roomh+.rcrop+.pinsec,.roomh+.pinsec{margin-top:4mm;border-top:0;padding-top:0}
+  .pinsec{break-before:page;page-break-before:always;margin-top:0;padding-top:0}
+  .pinsec.pkeep{break-before:avoid;page-break-before:avoid;margin-top:5mm}
+  .roomh{break-before:page;page-break-before:always}
   .pinsec h2,.pinsec .ph,.ent-p .edt{break-after:avoid;page-break-after:avoid}
-  .pbel{border-left:1.2mm solid #2563eb;padding-left:3mm;margin-top:5mm}
+  .pbel{border-left:1.2mm solid #2563eb;padding-left:3mm;margin-top:5mm;break-inside:avoid;page-break-inside:avoid}
   .pbel>h3.ph{break-after:avoid;page-break-after:avoid}
   .ptot{break-inside:avoid;break-before:avoid}
   .pbel>h3.ph{color:#1d4ed8;border-bottom-color:#93c5fd}
@@ -542,6 +543,8 @@ select.bst option{font-weight:600}
   .flm{margin-top:8mm}.flmh{border-bottom:1.2pt solid #92400e;padding-bottom:1mm;break-after:avoid}
   .flm h4{margin:3mm 0 1mm;font-size:10pt;color:#78350f;break-after:avoid}
   .eph{display:grid;grid-template-columns:repeat(4,1fr);gap:2mm;margin-top:2mm}
+  .eph.n5{grid-template-columns:repeat(5,1fr)}.eph.n6{grid-template-columns:repeat(6,1fr)}
+  .eph.n5 img{height:27mm!important}.eph.n6 img{height:22mm!important}
   .eph img{width:100%;height:34mm;object-fit:cover;background:#f3f3f3;border-radius:1mm;break-inside:avoid;display:block}
   .ephi{position:relative;break-inside:avoid}
   .ephi span{position:absolute;left:1.2mm;top:1.2mm;min-width:4mm;height:4mm;padding:0 1mm;border-radius:2mm;background:#0f766e;color:#fff;font:700 7pt/4mm Helvetica,Arial,sans-serif;text-align:center}
@@ -629,7 +632,7 @@ const today=()=>isoDate(new Date());
 const fmtDate=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d&&m?`${d}.${m}.${y}`:s};
 const parseAmount=s=>{const t=String(s).replace(/[’'\s]/g,'').replace(',','.');if(t==='')return '';const n=parseFloat(t);return isNaN(n)?'':Math.round(n*100)/100};
 const isPdfFile=f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name||'');
-const APP_VERSION='80 (23.11.2026, Inhalt zusammen)';
+const APP_VERSION='81 (23.11.2026, 1 Pin pro Seite)';
 const CATS=['Material','Arbeitsstunden','Werkzeug / Miete','Entsorgung','Dienstleistung','Sonstiges'];
 /* Gewerke: Standardliste, eigene Liste liegt in S.project.gewerke [{n:Name,c:Farbe}] und wird mitsynchronisiert */
 const GW_DEF=[['Holzbau','#92400e'],['Sanitär','#2563eb'],['Elektro','#ca8a04'],['Bodenleger','#0d9488'],['Gipser','#6b7280'],['Maler','#9333ea'],['Ofenbauer','#dc2626'],['Küchenbauer','#db2777']].map(([n,c])=>({n,c}));
@@ -717,7 +720,7 @@ const floorHasRoomAreas=f=>roomsOf(f).some(r=>r.area&&r.area.length>2);
 function roomCropHtml(f,r,pins){if(!r.area||r.area.length<3)return '';const b=blobMap.get(f.planId)||{},W=b.w||1,H=b.h||1;
   const xs=r.area.map(p=>p[0]),ys=r.area.map(p=>p[1]);let x1=Math.min(...xs),x2=Math.max(...xs),y1=Math.min(...ys),y2=Math.max(...ys);
   const mx=Math.max((x2-x1)*.08,.015),my=Math.max((y2-y1)*.08,.015*W/H);x1=Math.max(0,x1-mx);x2=Math.min(1,x2+mx);y1=Math.max(0,y1-my);y2=Math.min(1,y2+my);
-  const bw=x2-x1,bh=y2-y1,A=(bw*W)/(bh*H),wmm=Math.min(184,105*A);
+  const bw=x2-x1,bh=y2-y1,A=(bw*W)/(bh*H),wmm=Math.min(184,105*A);roomCropHtml.h=wmm/A;
   return `<div class="rcrop" style="width:${wmm.toFixed(1)}mm;aspect-ratio:${A.toFixed(4)}"><div class="rcin" style="width:${100/bw}%;height:${100/bh}%;left:${-x1/bw*100}%;top:${-y1/bh*100}%">
     <img src="${urlOf(f.planId)}" alt="">${areasHtml(f)}<svg class="areas rmask" viewBox="0 0 1000 1000" preserveAspectRatio="none"><path fill-rule="evenodd" d="M0,0 1000,0 1000,1000 0,1000Z M${ptsStr(r.area)}Z"/></svg><svg class="areas rsel" viewBox="0 0 1000 1000" preserveAspectRatio="none"><polygon points="${ptsStr(r.area)}"/></svg>
     ${pins.map(p=>`<span class="pin ${pinState(p)}" style="left:${p.x*100}%;top:${p.y*100}%">${p.nr}${pinLbl(p)}</span>`).join('')}</div></div>${pinLegend()}`}
@@ -2231,16 +2234,23 @@ async function doPrint(){try{const n=await repairItemLinks();if(n)console.log('V
       h+=`<section class="pg"><h2>${esc(floorLabel(f))}${isSite(f)?'':' – Grundriss'}</h2><div class="pplan" style="width:${wmm.toFixed(1)}mm"><img src="${urlOf(f.planId)}" alt="">${areasHtml(f)}${floorHasRoomAreas(f)?'':pins.map(p=>`<span class="pin ${pinState(p)}" style="left:${p.x*100}%;top:${p.y*100}%">${p.nr}${pinLbl(p)}</span>`).join('')}</div>${floorHasRoomAreas(f)?'':pinLegend()}</section>`}
     if(o.entries)for(const grp of pinGroups(f,pins)){if(!grp.pins.length)continue;const hasRooms=roomsOf(f).length>0;let rb=0,rm=0;
     if(hasRooms)h+=`<h2 class="roomh">${grp.room?'▭ '+esc(grp.room.name):'Ohne Zimmer'} <small>· ${esc(floorLabel(f))} · ${grp.pins.length} Pin(s)</small></h2>`;
-    if(hasRooms&&grp.room&&o.plans&&f.planId)h+=roomCropHtml(f,grp.room,grp.pins);
+    let room=hasRooms?22:0;if(hasRooms&&grp.room&&o.plans&&f.planId){roomCropHtml.h=0;const ch=roomCropHtml(f,grp.room,grp.pins);h+=ch;if(ch)room+=roomCropHtml.h+12}
+    let firstPin=true;
     for(const p of grp.pins){const es=entriesOf(p).filter(eOk).filter(e=>e.photoIds.length||e.note||e.material||dimTxt(e)||GEWERKE.some(g=>e.gwText[g]||matsOf(e,g).length));
       const pb=belegeByNr().filter(b=>pinBelegIds(p).includes(b.id)&&(!G||gwShare(b,p.id,G)));
       const bSum=pb.reduce((x,b)=>x+gwShare(b,p.id,G),0),mSum=matTotal(es.flatMap(e=>e.mats));rb+=bSum;rm+=mSum;
-      h+=`<section class="pinsec"><h2 class="pinh"><span class="enr" style="display:inline-flex;margin-right:2mm;vertical-align:middle">${p.nr}</span>${esc(p.title||'Ohne Titel')} <span style="font-weight:400;color:#666;font-size:11pt">· ${esc(floorLabel(f))}${grp.room?' · '+esc(grp.room.name):''}${p.surf?' · Oberfläche '+esc(p.surf):''}</span></h2>
+      /* grobe Höhenschätzung (mm): erster Pin bleibt auf der Zimmerseite, wenn er dort ganz Platz hat */
+      let keep=false;if(firstPin&&room){const ph=n=>!n?0:n>12?Math.ceil(n/6)*25:n>8?Math.ceil(n/5)*30:Math.ceil(n/4)*37;
+        const est=16+es.reduce((x,e)=>x+8+ph(e.photoIds.length)+(e.note?8:0)+(dimTxt(e)?12:0)+GEWERKE.reduce((y,g)=>{const n=matsOf(e,g).length;return y+(n?10+n*6:0)+(e.gwText[g]?6:0)},0),0)
+          +(pb.length?12+pb.reduce((x,b)=>x+6+(pdfItemRows(b,p.id,G).split('<tr').length-1)*4,0):10)+12;
+        keep=room+est<262}
+      firstPin=false;
+      h+=`<section class="pinsec${keep?' pkeep':''}"><h2 class="pinh"><span class="enr" style="display:inline-flex;margin-right:2mm;vertical-align:middle">${p.nr}</span>${esc(p.title||'Ohne Titel')} <span style="font-weight:400;color:#666;font-size:11pt">· ${esc(floorLabel(f))}${grp.room?' · '+esc(grp.room.name):''}${p.surf?' · Oberfläche '+esc(p.surf):''}</span></h2>
       ${es.length?'<h3 class="ph">Dokumentation</h3>':''}
       ${es.map(e=>`<div class="ent-p"><div class="edt">${esc(entLabel(p,e))}${entDateSfx(e)}${entTags(e).length?` <span style="font-weight:400;color:#555">· ${entTags(e).join(', ')}</span>`:''}</div>
         ${dimTxt(e)?`<p><i>Fläche:</i> ${dimTxt(e)}</p>${isShaped(e)?`<div class="wskp">${shapeSvg(e,200,120)}</div>`:''}`:''}${e.note?`<p>${nl2br(e.note)}</p>`:''}${e.material?`<p><i>Material:</i> ${nl2br(e.material)}</p>`:''}
         ${GEWERKE.map(g=>{const t=e.gwText[g]||'',ms=matsOf(e,g).map(x=>x[0]);if(!t&&!ms.length)return '';return ms.length?`<div class="matb">${t?`<p><b>${g}:</b> ${nl2br(t)}</p>`:`<p><b>${g}-Material:</b></p>`}${matTable(ms)}</div>`:`<p><b>${g}:</b> ${nl2br(t)}</p>`}).join('')}
-        ${e.photoIds.length?`<div class="eph">${e.photoIds.map((id,i)=>`<div class="ephi"><img src="${urlOf(id)}" alt=""><span>${i+1}</span></div>`).join('')}</div>`:''}</div>`).join('')}
+        ${e.photoIds.length?`<div class="eph ${e.photoIds.length>12?'n6':e.photoIds.length>8?'n5':''}">${e.photoIds.map((id,i)=>`<div class="ephi"><img src="${urlOf(id)}" alt=""><span>${i+1}</span></div>`).join('')}</div>`:''}</div>`).join('')}
       <div class="pbel"><h3 class="ph">Belege</h3>
       ${pb.length?`<table class="mt"><thead><tr><th>Nr.</th><th>Datum</th><th>Lieferant</th><th>Beschreibung</th><th>Gewerk</th><th class="r">Beleg CHF</th><th class="r">Anteil Pin CHF</th></tr></thead>
         ${pb.map(b=>{const n=belegShares(b).size,ir=pdfItemRows(b,p.id,G);return `<tbody class="bg${ir?' bgi':''}"><tr class="bh"><td>B-${pad(b.nr)}</td><td>${fmtDate(b.date)}</td><td>${esc(b.supplier)}</td><td>${esc(b.desc)}</td><td>${esc(b.gewerk||'')}</td><td class="r">${b.amount===''?'':chf(b.amount)}</td><td class="r">${chf(gwShare(b,p.id,G))}${n>1?`<br><small style="color:#666">${splitModeTxt(b)} (${n} Pins)</small>`:''}</td></tr>${ir}</tbody>`}).join('')}
